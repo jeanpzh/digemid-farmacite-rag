@@ -1,0 +1,72 @@
+services:
+  ollama:
+    image: ollama/ollama:latest
+    ports:
+      - "11434:11434"
+    volumes:
+      - ollama-models:/root/.ollama
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-embeddinggemma}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        ollama serve &
+        server_pid=$$!
+        until OLLAMA_HOST=http://127.0.0.1:11434 ollama list >/dev/null 2>&1; do
+          sleep 1
+        done
+        OLLAMA_HOST=http://127.0.0.1:11434 ollama pull "$${EMBEDDING_MODEL}"
+        wait "$${server_pid}"
+    healthcheck:
+      test: ["CMD-SHELL", "OLLAMA_HOST=http://127.0.0.1:11434 ollama show \"$${EMBEDDING_MODEL}\" >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 5s
+      start_period: 10s
+      retries: 120
+
+  app:
+    build: .
+    depends_on:
+      ollama:
+        condition: service_healthy
+    env_file:
+      - ./apps/backend/.env
+    develop:
+      watch:
+        - action: sync+restart
+          path: ./apps/backend/app
+          target: /app/backend/app
+        - action: rebuild
+          path: ./apps/backend/pyproject.toml
+
+    ports:
+      - "8000:8000"
+    volumes:
+      - app-data:/app/backend/data
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-embeddinggemma}
+      VECTOR_COLLECTION: ${VECTOR_COLLECTION:-digemid}
+
+  indexer:
+    build: .
+    depends_on:
+      ollama:
+        condition: service_healthy
+    profiles: ["indexing"]
+    env_file:
+      - ./apps/backend/.env
+    command: ["python", "-m", "app.scripts.index_to_rag"]
+    volumes:
+      - app-data:/app/backend/data
+    environment:
+      OLLAMA_BASE_URL: http://ollama:11434
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-embeddinggemma}
+      VECTOR_COLLECTION: ${VECTOR_COLLECTION:-digemid}
+
+volumes:
+  app-data:
+    driver: local
+  ollama-models:
+    driver: local
