@@ -1,21 +1,20 @@
 import asyncio
 import logging
-import os
 import tempfile
-from functools import lru_cache
 from hashlib import sha256
 from pathlib import Path
 from typing import Iterable, Iterator, TypeVar
-from urllib.parse import urlparse
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.documents import Document
-from langchain_ollama import OllamaEmbeddings
+from langchain_core.embeddings import Embeddings
 from langchain_postgres import Column as VectorColumn, PGEngine
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from pgvector.sqlalchemy import VECTOR
-from sqlalchemy import Column, Integer, MetaData, Table, Text, create_engine, delete
+from sqlalchemy import Column, Engine, Integer, MetaData, Table, Text, create_engine, delete
 from sqlalchemy.dialects.postgresql import JSONB, insert
+
+from app.settings import settings
 
 logger = logging.getLogger(__name__)
 
@@ -27,8 +26,6 @@ async def close_pg_engine(engine: PGEngine) -> None:
 VECTOR_SCHEMA = "rag"
 VECTOR_TABLE = "langchain_embeddings"
 EMBEDDING_DIMENSION = 768
-DEFAULT_EMBEDDING_MODEL = "embeddinggemma"
-DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"
 PARSER_VERSION = "langchain-pypdf-recursive-1000-150"
 METADATA_COLUMNS = ["collection", "doc_hash", "page", "start_index"]
 CHUNK_SIZE = 1_000
@@ -62,29 +59,6 @@ SPLITTER = RecursiveCharacterTextSplitter(
 )
 
 
-def _ollama_base_url() -> str:
-    base_url = os.getenv("OLLAMA_BASE_URL", DEFAULT_OLLAMA_BASE_URL).strip()
-    parsed = urlparse(base_url)
-    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
-        raise ValueError("OLLAMA_BASE_URL must be a valid HTTP(S) URL")
-    return base_url.rstrip("/")
-
-
-@lru_cache(maxsize=1)
-def make_embedding_service(model_name: str | None = None) -> OllamaEmbeddings:
-    model = (model_name or os.getenv("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL)).strip()
-    if not model:
-        raise ValueError("embedding model must not be blank")
-
-    service = OllamaEmbeddings(model=model, base_url=_ollama_base_url())
-    dimension = len(service.embed_query("embedding dimension check"))
-    if dimension != EMBEDDING_DIMENSION:
-        raise ValueError(
-            f"embedding model produces {dimension} dimensions; expected {EMBEDDING_DIMENSION}"
-        )
-    return service
-
-
 def chunk_id(collection: str, doc_hash: str, document: Document) -> str:
     page = document.metadata.get("page", 0)
     start_index = document.metadata.get("start_index", 0)
@@ -93,9 +67,16 @@ def chunk_id(collection: str, doc_hash: str, document: Document) -> str:
 
 
 def make_chunk_documents(
-    pages: Iterable[Document], *, collection: str, doc_hash: str
+    pages: Iterable[Document],
+    *,
+    collection: str,
+    doc_hash: str,
+    filename: str | None = None,
+    source_url: str | None = None,
 ) -> list[Document]:
-    chunks = SPLITTER.split_documents(list(pages))
+    pages = list(pages)
+    total_pages = len(pages)
+    chunks = SPLITTER.split_documents(pages)
     result: list[Document] = []
     for chunk in chunks:
         metadata = {
@@ -104,9 +85,17 @@ def make_chunk_documents(
             "doc_hash": doc_hash,
             "page": int(chunk.metadata.get("page", 0)),
             "start_index": int(chunk.metadata.get("start_index", 0)),
+            "end_index": int(chunk.metadata.get("start_index", 0)) + len(chunk.page_content),
+            "page_label": str(int(chunk.metadata.get("page", 0)) + 1),
+            "total_pages": total_pages,
         }
+        if filename is not None:
+            metadata["filename"] = filename
+        if source_url is not None:
+            metadata["source_url"] = source_url
         normalized = Document(page_content=chunk.page_content, metadata=metadata)
         normalized.id = chunk_id(collection, doc_hash, normalized)
+        normalized.metadata["chunk_id"] = normalized.id
         result.append(normalized)
     return result
 
@@ -119,7 +108,7 @@ def batch_items(items: list[T], size: int) -> Iterator[list[T]]:
 
 
 def embed_documents_in_batches(
-    embedding_service: OllamaEmbeddings, texts: list[str]
+    embedding_service: Embeddings, texts: list[str]
 ) -> list[list[float]]:
     embeddings: list[list[float]] = []
     for batch in batch_items(texts, EMBEDDING_BATCH_SIZE):
@@ -149,18 +138,42 @@ def make_embedding_records(
 
 
 class LangChainIndexer:
-    def __init__(self, database_url: str, embedding_service: OllamaEmbeddings):
-        self.db_engine = create_engine(database_url)
+    def __init__(
+        self,
+        database_url: str,
+        embedding_service: Embeddings,
+        db_engine: Engine | None = None,
+    ):
+        self.db_engine = db_engine or create_engine(
+            database_url,
+            pool_size=1,
+            max_overflow=0,
+            pool_pre_ping=True,
+        )
+        self.owns_db_engine = db_engine is None
         self.embedding_service = embedding_service
 
-    def index_pdf(self, contents: bytes, filename: str, collection: str, doc_hash: str) -> str:
+    def index_pdf(
+        self,
+        contents: bytes,
+        filename: str,
+        collection: str,
+        doc_hash: str,
+        source_url: str | None = None,
+    ) -> str:
         suffix = Path(filename).suffix or ".pdf"
         with tempfile.NamedTemporaryFile(suffix=suffix) as temporary_file:
             temporary_file.write(contents)
             temporary_file.flush()
             pages = PyPDFLoader(temporary_file.name).load()
 
-        chunks = make_chunk_documents(pages, collection=collection, doc_hash=doc_hash)
+        chunks = make_chunk_documents(
+            pages,
+            collection=collection,
+            doc_hash=doc_hash,
+            filename=filename,
+            source_url=source_url,
+        )
         if not chunks:
             raise ValueError("the document did not yield any indexable text")
         logger.info(
@@ -216,7 +229,8 @@ class LangChainIndexer:
         return "\n\n".join(page.page_content for page in pages)
 
     def close(self) -> None:
-        self.db_engine.dispose()
+        if self.owns_db_engine:
+            self.db_engine.dispose()
 
 
 def initialize_vector_table(database_url: str) -> None:

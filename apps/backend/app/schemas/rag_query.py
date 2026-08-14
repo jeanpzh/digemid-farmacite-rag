@@ -23,7 +23,10 @@ class RAGQueryResponse(BaseModel):
 
 
 class RAGCitation(BaseModel):
-    id: str = Field(..., description="Citation identifier used in the answer, e.g. S1")
+    id: str = Field(..., description="Stable citation identifier")
+    label: str = Field(..., description="Citation label used in the answer, e.g. S1")
+    document_id: str
+    document_version: str
     chunk_id: str
     filename: str
     url: str | None = None

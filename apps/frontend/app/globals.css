@@ -1,0 +1,114 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "react-pdf/dist/Page/AnnotationLayer.css";
+@import "react-pdf/dist/Page/TextLayer.css";
+
+@custom-variant dark (&:is(.dark *));
+
+:root {
+  --radius: 0.625rem;
+  --ink-black: #11151cff;
+  --ink-black-2: #151b25ff;
+  --shadow-grey: #19212eff;
+  --deep-space-blue: #212d40ff;
+  --deep-space-blue-2: #273246ff;
+  --deep-space-blue-3: #2c374bff;
+  --charcoal-blue: #313c51ff;
+  --charcoal-blue-2: #343f54ff;
+  --charcoal-blue-3: #364156ff;
+  --charcoal-blue-4: #485265ff;
+  --background: var(--ink-black);
+  --foreground: #e0e1dd;
+  --card: var(--ink-black-2);
+  --card-foreground: #e0e1dd;
+  --popover: var(--ink-black-2);
+  --popover-foreground: #e0e1dd;
+  --primary: var(--charcoal-blue-4);
+  --primary-foreground: #11151c;
+  --secondary: var(--charcoal-blue);
+  --secondary-foreground: #e0e1dd;
+  --muted: var(--shadow-grey);
+  --muted-foreground: #b4bdca;
+  --accent: var(--charcoal-blue);
+  --accent-foreground: #e0e1dd;
+  --destructive: var(--charcoal-blue-4);
+  --border: var(--charcoal-blue-4);
+  --input: var(--charcoal-blue-4);
+  --ring: #e0e1dd;
+  --brand-accent: var(--charcoal-blue-4);
+  --brand-accent-foreground: #e0e1dd;
+  --chart-1: var(--charcoal-blue-4);
+  --chart-2: var(--charcoal-blue-3);
+  --chart-3: var(--charcoal-blue-2);
+  --chart-4: var(--ink-black);
+  --chart-5: var(--deep-space-blue-3);
+  --sidebar: var(--ink-black);
+  --sidebar-foreground: #e0e1dd;
+  --sidebar-primary: var(--charcoal-blue-4);
+  --sidebar-primary-foreground: #e0e1dd;
+  --sidebar-accent: var(--charcoal-blue);
+  --sidebar-accent-foreground: #e0e1dd;
+  --sidebar-border: var(--charcoal-blue-4);
+  --sidebar-ring: #e0e1dd;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-brand-accent: var(--brand-accent);
+  --color-brand-accent-foreground: var(--brand-accent-foreground);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-geist-sans);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+  }
+
+  html {
+    @apply font-sans;
+  }
+}

@@ -1,19 +1,16 @@
-import os
 from collections.abc import Iterator
 from contextlib import contextmanager
 from functools import lru_cache
-
-from dotenv import load_dotenv
+from app.settings import settings
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import NullPool
+from langchain_postgres import PGEngine
 
-load_dotenv()
-
-DB_URL = os.getenv("SUPABASE_DB_URL", "")
-DB_POOL_MIN_SIZE = int(os.getenv("DB_POOL_MIN_SIZE", "1"))
-DB_POOL_MAX_SIZE = int(os.getenv("DB_POOL_MAX_SIZE", "4"))
-DB_POOL_TIMEOUT = float(os.getenv("DB_POOL_TIMEOUT", "30"))
+DB_URL = settings.supabase_db_url
+DB_POOL_MIN_SIZE = settings.db_pool_min_size
+DB_POOL_MAX_SIZE = settings.db_pool_max_size
+DB_POOL_TIMEOUT = settings.db_pool_timeout
 
 
 def _database_url() -> str:
@@ -42,6 +39,10 @@ def engine():
 
     return db_engine
 
+def vector_engine() -> PGEngine:
+    return PGEngine.from_connection_string(
+        _database_url(),
+    )
 
 @lru_cache(maxsize=1)
 def session_factory() -> sessionmaker[Session]:

@@ -1,25 +1,35 @@
 services:
   ollama:
-    image: ollama/ollama:latest
+    image: ${OLLAMA_IMAGE:-ollama/ollama@sha256:b88c73ace3e115f8ec53dc8761ae1c0aabfa675406e3681786b98757ce050f42}
     ports:
       - "11434:11434"
     volumes:
       - ollama-models:/root/.ollama
     environment:
       OLLAMA_HOST: 0.0.0.0:11434
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-embeddinggemma}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-embeddinggemma:latest}
+      EMBEDDING_MODEL_DIGEST: ${EMBEDDING_MODEL_DIGEST:-85462619ee721b466c5927d109d4cb765861907d5417b9109caebc4e614679f1}
+      EMBEDDING_MODEL_MANIFEST: ${EMBEDDING_MODEL_MANIFEST:-/root/.ollama/models/manifests/registry.ollama.ai/library/embeddinggemma/latest}
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
+        set -eu
+        rm -f /tmp/embedding-model-verified
         ollama serve &
         server_pid=$$!
         until OLLAMA_HOST=http://127.0.0.1:11434 ollama list >/dev/null 2>&1; do
           sleep 1
-        done
-        OLLAMA_HOST=http://127.0.0.1:11434 ollama pull "$${EMBEDDING_MODEL}"
-        wait "$${server_pid}"
+         done
+         OLLAMA_HOST=http://127.0.0.1:11434 ollama pull "$${EMBEDDING_MODEL}"
+         actual_digest=$$(sha256sum "$${EMBEDDING_MODEL_MANIFEST}" | awk '{ print $$1 }')
+         [ "$${actual_digest}" = "$${EMBEDDING_MODEL_DIGEST}" ] || {
+           echo "Embedding manifest digest mismatch" >&2
+           exit 1
+         }
+         touch /tmp/embedding-model-verified
+         wait "$${server_pid}"
     healthcheck:
-      test: ["CMD-SHELL", "OLLAMA_HOST=http://127.0.0.1:11434 ollama show \"$${EMBEDDING_MODEL}\" >/dev/null 2>&1"]
+      test: ["CMD-SHELL", "test -f /tmp/embedding-model-verified && OLLAMA_HOST=http://127.0.0.1:11434 ollama show \"$${EMBEDDING_MODEL}\" >/dev/null 2>&1"]
       interval: 5s
       timeout: 5s
       start_period: 10s
@@ -46,7 +56,7 @@ services:
       - app-data:/app/backend/data
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-embeddinggemma}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-embeddinggemma:latest}
       VECTOR_COLLECTION: ${VECTOR_COLLECTION:-digemid}
 
   indexer:
@@ -62,7 +72,7 @@ services:
       - app-data:/app/backend/data
     environment:
       OLLAMA_BASE_URL: http://ollama:11434
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-embeddinggemma}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-embeddinggemma:latest}
       VECTOR_COLLECTION: ${VECTOR_COLLECTION:-digemid}
 
 volumes:

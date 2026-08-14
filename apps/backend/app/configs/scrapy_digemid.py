@@ -1,4 +1,3 @@
-import os
 from hashlib import sha256
 from pathlib import Path
 from urllib.parse import unquote, urlparse
@@ -10,6 +9,7 @@ from sqlalchemy.dialects.postgresql import insert
 from supabase import create_client
 from app.models.document import Document
 from app.db import session_scope
+from app.settings import settings
 
 BOT_NAME = "digemid"
 SPIDER_NAME = "digemid_pdfs"
@@ -140,8 +140,8 @@ class SupabaseDocumentsPipeline:
 
 
 def get_storage_client():
-    supabase_url = os.getenv("SUPABASE_URL")
-    service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    supabase_url = settings.supabase_url
+    service_role_key = settings.supabase_service_role_key
     if not supabase_url or not service_role_key:
         raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set")
     return create_client(supabase_url, service_role_key)

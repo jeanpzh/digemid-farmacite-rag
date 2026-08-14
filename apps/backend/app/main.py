@@ -1,18 +1,36 @@
 import os
-from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
+from app.dependencies.chat import create_chat_service
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers.query import router as query_router
-from app.services.langchain_indexer import DEFAULT_EMBEDDING_MODEL, make_embedding_service
-
+from app.routers.chat import router as chat_router
+from app.infraestructure.embeddings import create_embedding_service
+from app.infraestructure.llm import create_model
+from app.infraestructure.vector_store import create_vector_store
+from app.db import engine, vector_engine
 
 @asynccontextmanager
-async def lifespan(_: FastAPI) -> AsyncIterator[None]:
-    make_embedding_service(os.getenv("EMBEDDING_MODEL", DEFAULT_EMBEDDING_MODEL))
+async def lifespan(app: FastAPI):
+
+    pg_engine = vector_engine()
+
+    embedding_service = create_embedding_service()
+
+    model = create_model()
+
+    vector_store = create_vector_store(
+        engine=pg_engine,
+        embedding_service=embedding_service,
+    )
+    app.state.chat_service = create_chat_service(
+        vector_store=vector_store,
+        model=model,
+        metadata_engine=engine(),
+    )
     yield
+
 
 app = FastAPI(
     title = "RAG DIGEMID",
@@ -28,11 +46,11 @@ app.add_middleware(
         if origin.strip()
     ],
     allow_credentials=False,
-    allow_methods=["GET", "POST"],
+    allow_methods=["DELETE", "GET", "PATCH", "POST"],
     allow_headers=["Content-Type", "Authorization"],
 )
 
-app.include_router(query_router, prefix="/api/v1")
+app.include_router(chat_router, prefix="/api/v1")
 
 @app.get("/api/v1/health")
 async def health() -> dict[str, str]:

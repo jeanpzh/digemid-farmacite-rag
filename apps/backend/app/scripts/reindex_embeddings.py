@@ -1,21 +1,16 @@
 """Reset a collection so every document is reindexed with the current model."""
 
 import argparse
-import os
 
 from sqlalchemy import delete, func, update
 
 from app.db import advisory_lock, session_scope
 from app.models.document import Document
 from app.models.embedding_config import EmbeddingConfig
-from app.services.langchain_indexer import (
-    DEFAULT_EMBEDDING_MODEL,
-    EMBEDDING_DIMENSION,
-    embedding_table,
-)
+from app.services.langchain_indexer import embedding_table
+from app.settings import settings
 
-DEFAULT_COLLECTION = os.getenv("VECTOR_COLLECTION", "digemid")
-EMBEDDING_MODEL = (os.getenv("EMBEDDING_MODEL") or DEFAULT_EMBEDDING_MODEL).strip()
+DEFAULT_COLLECTION = settings.vector_collection
 
 
 def reset_embedding_index(collection: str = DEFAULT_COLLECTION) -> int:
@@ -43,8 +38,8 @@ def reset_embedding_index(collection: str = DEFAULT_COLLECTION) -> int:
                 update(EmbeddingConfig)
                 .where(EmbeddingConfig.id.is_(True))
                 .values(
-                    model=EMBEDDING_MODEL,
-                    embedding_dimension=EMBEDDING_DIMENSION,
+                    model=settings.embedding_model,
+                    embedding_dimension=settings.embedding_dimension,
                 )
             )
     return result.rowcount or 0
