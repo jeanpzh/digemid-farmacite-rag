@@ -6,6 +6,10 @@ import pytest
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker
 
+os.environ.setdefault("SUPABASE_DB_URL", "postgresql://example.test/db")
+os.environ.setdefault("GROQ_API_KEY", "test-groq-key")
+
+
 @pytest.fixture(scope="session")
 def database_url() -> str:
     value = os.getenv("DB_URL")

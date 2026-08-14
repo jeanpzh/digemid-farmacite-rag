@@ -1,3 +1,4 @@
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
@@ -7,6 +8,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 VECTOR_SCHEMA = "rag"
 VECTOR_TABLE = "langchain_embeddings"
 DEFAULT_EMBEDDING_MODEL = "embeddinggemma"
+ROOT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 ReasoningFormat = Literal["hidden", "parsed", "raw"]
 ChatProvider = Literal["groq", "ollama"]
 Environment = Literal["development", "production"]
@@ -14,7 +16,7 @@ Environment = Literal["development", "production"]
 class Settings(BaseSettings):
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=ROOT_ENV_FILE,
         env_file_encoding="utf-8",
         frozen=True,
         extra="ignore",

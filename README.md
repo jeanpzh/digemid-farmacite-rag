@@ -38,7 +38,13 @@ flowchart LR
 
 ## Configuration
 
-Create `apps/backend/.env`:
+Copy `.env.example` to `.env` at the repository root, then fill in the values:
+
+```bash
+cp .env.example .env
+```
+
+The essential variables are:
 
 ```env
 SUPABASE_DB_URL=postgresql://<user>:<password>@<host>:5432/<database>
@@ -62,6 +68,8 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY` belongs only in the backend environment. Do not expose it through `NEXT_PUBLIC_*` variables or client code.
+
+Docker Compose loads the root `.env` file automatically. In Dokploy, add the same values in the Compose **Environments** panel; Dokploy does not receive local `.env` files from Git.
 
 ## Run Locally
 

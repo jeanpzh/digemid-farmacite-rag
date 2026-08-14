@@ -40,8 +40,6 @@ services:
     depends_on:
       ollama:
         condition: service_healthy
-    env_file:
-      - ./apps/backend/.env
     develop:
       watch:
         - action: sync+restart
@@ -55,9 +53,21 @@ services:
     volumes:
       - app-data:/app/backend/data
     environment:
-      OLLAMA_BASE_URL: http://ollama:11434
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-embeddinggemma:latest}
-      VECTOR_COLLECTION: ${VECTOR_COLLECTION:-digemid}
+      - SUPABASE_DB_URL=${SUPABASE_DB_URL:-}
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+      - CHAT_PROVIDER=${CHAT_PROVIDER:-groq}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - MODEL_NAME=${MODEL_NAME:-qwen/qwen3.6-27b}
+      - LANGSMITH_TRACING=${LANGSMITH_TRACING:-false}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-digemid-rag}
+      - LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-768}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-embeddinggemma:latest}
+      - VECTOR_COLLECTION=${VECTOR_COLLECTION:-digemid}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - OLLAMA_BASE_URL=http://ollama:11434
 
   indexer:
     build: .
@@ -65,15 +75,25 @@ services:
       ollama:
         condition: service_healthy
     profiles: ["indexing"]
-    env_file:
-      - ./apps/backend/.env
     command: ["python", "-m", "app.scripts.index_to_rag"]
     volumes:
       - app-data:/app/backend/data
     environment:
-      OLLAMA_BASE_URL: http://ollama:11434
-      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-embeddinggemma:latest}
-      VECTOR_COLLECTION: ${VECTOR_COLLECTION:-digemid}
+      - SUPABASE_DB_URL=${SUPABASE_DB_URL:-}
+      - SUPABASE_URL=${SUPABASE_URL:-}
+      - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+      - CHAT_PROVIDER=${CHAT_PROVIDER:-groq}
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - MODEL_NAME=${MODEL_NAME:-qwen/qwen3.6-27b}
+      - LANGSMITH_TRACING=${LANGSMITH_TRACING:-false}
+      - LANGSMITH_API_KEY=${LANGSMITH_API_KEY:-}
+      - LANGSMITH_PROJECT=${LANGSMITH_PROJECT:-digemid-rag}
+      - LANGSMITH_ENDPOINT=${LANGSMITH_ENDPOINT:-https://api.smith.langchain.com}
+      - EMBEDDING_DIMENSION=${EMBEDDING_DIMENSION:-768}
+      - EMBEDDING_MODEL=${EMBEDDING_MODEL:-embeddinggemma:latest}
+      - VECTOR_COLLECTION=${VECTOR_COLLECTION:-digemid}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
+      - OLLAMA_BASE_URL=http://ollama:11434
 
 volumes:
   app-data:
