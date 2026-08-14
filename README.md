@@ -71,6 +71,21 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 
 Docker Compose loads the root `.env` file automatically. In Dokploy, add the same values in the Compose **Environments** panel; Dokploy does not receive local `.env` files from Git.
 
+## Production URLs
+
+The frontend and backend do not use `FRONTEND_URL` or `BACKEND_URL` variables.
+Configure the variables that the applications actually read:
+
+```env
+# Frontend deployment environment
+NEXT_PUBLIC_API_URL=https://api-rag.example.com
+
+# Backend Compose environment
+CORS_ORIGINS=https://rag.example.com
+```
+
+`NEXT_PUBLIC_API_URL` is embedded when Next.js builds, so redeploy the frontend after changing it. `CORS_ORIGINS` is a comma-separated list when more than one frontend origin needs access.
+
 ## Run Locally
 
 Start Ollama and the API with Docker:

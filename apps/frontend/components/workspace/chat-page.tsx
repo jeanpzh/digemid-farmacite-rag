@@ -13,7 +13,6 @@ import { cn } from "@/lib/utils";
 export function ChatPage() {
   const pageRef = useRef<HTMLDivElement>(null);
   const {
-    conversationId,
     error,
     isLoading,
     messages,
@@ -22,16 +21,16 @@ export function ChatPage() {
   } = useWorkspace();
   const [selectedCitation, setSelectedCitation] = useState<{
     citationId: string;
-    conversationId: string | null;
     messageId: string;
   } | null>(null);
   const [panelCitations, setPanelCitations] = useState<Citation[]>([]);
   const citationTriggerRef = useRef<string | null>(null);
   const visiblePanelCitations = messages.length === 0 ? [] : panelCitations;
-  const activeCitation =
-    selectedCitation?.conversationId === conversationId
-      ? visiblePanelCitations.find((citation) => citation.id === selectedCitation.citationId) ?? null
-      : null;
+  const activeCitation = selectedCitation
+    ? visiblePanelCitations.find(
+        (citation) => citation.id === selectedCitation.citationId,
+      ) ?? null
+    : null;
   const lastUserQuestion = [...messages]
     .reverse()
     .find((message) => message.role === "user")
@@ -49,7 +48,6 @@ export function ChatPage() {
     setPanelCitations(citations);
     setSelectedCitation({
       citationId: citation.id,
-      conversationId,
       messageId,
     });
   }

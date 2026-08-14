@@ -94,8 +94,15 @@ The response uses the AI SDK data-stream media type. Events include retrieval st
 | `OLLAMA_BASE_URL` | No | `http://localhost:11434` | Ollama endpoint. |
 | `VECTOR_COLLECTION` | No | `digemid` | pgvector collection name. |
 | `RETRIEVAL_MAX_DISTANCE` | No | `0.7` | Maximum accepted vector distance. |
+| `CORS_ORIGINS` | No | `http://localhost:3000` | Comma-separated frontend origins allowed to call the API. |
 
 The vector schema requires 768-dimensional embeddings. Changing the embedding model or its dimension requires a compatible collection and a full reindex.
+
+For a production frontend at `https://rag.example.com`, set:
+
+```env
+CORS_ORIGINS=https://rag.example.com
+```
 
 ## Data Pipeline
 

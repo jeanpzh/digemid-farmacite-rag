@@ -23,6 +23,16 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 
 Only publish browser-safe values through `NEXT_PUBLIC_*` variables. Backend service keys never belong in this file.
 
+## Deployment Environment
+
+Set the public API address in the frontend deployment environment:
+
+```env
+NEXT_PUBLIC_API_URL=https://api-rag.example.com
+```
+
+This is the only backend URL variable read by the frontend. Next.js embeds `NEXT_PUBLIC_*` values at build time, so changing it requires a new build and deployment.
+
 ## Workspace Flow
 
 ```mermaid
