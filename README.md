@@ -26,6 +26,7 @@ flowchart LR
 | `apps/frontend` | Next.js chat workspace and citation UI. |
 | `apps/backend` | FastAPI chat API, retrieval pipeline, ingestion, and indexing. |
 | `docker-compose.yml` | Local Ollama, API, and indexer services. |
+| `docker-compose.gpu.yml` | Optional NVIDIA GPU reservation for the Ollama service. |
 
 ## Requirements
 
@@ -71,6 +72,12 @@ docker compose up --build app
 ```
 
 The compose stack starts Ollama, pulls `embeddinggemma`, verifies the model manifest, and starts the FastAPI service on port `8000`.
+
+On a host with NVIDIA drivers and Docker GPU support, combine the GPU override with the main compose file to expose all NVIDIA GPUs to Ollama:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build app
+```
 
 In another terminal, start the frontend:
 
