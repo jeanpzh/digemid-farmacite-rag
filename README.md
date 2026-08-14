@@ -1,225 +1,146 @@
+# DIGEMID RAG
 
-# RAG DIGEMID
+DIGEMID RAG answers questions about Peruvian over-the-counter pharmaceutical documentation. It retrieves excerpts from a pgvector collection, streams a grounded answer, and attaches each claim to a PDF source and page.
 
-RAG DIGEMID is a document retrieval service for pharmaceutical information
-published by DIGEMID. It downloads official PDF documents, stores the originals
-in Supabase Storage, creates local embeddings with Ollama, and retrieves cited
-source chunks through a FastAPI endpoint.
+The application is for document consultation. It does not replace professional medical, pharmaceutical, or regulatory advice.
 
 ## Architecture
 
 ```mermaid
-flowchart TD
-    source[DIGEMID website] --> downloader[Scrapy downloader]
-    downloader --> storage[Supabase Storage]
-    downloader --> documents[(rag.documents)]
-    storage --> indexer[PDF indexer]
-    documents --> indexer
-    indexer --> parser[PyPDFLoader]
-    parser --> splitter[RecursiveCharacterTextSplitter]
-    splitter --> embeddings[Ollama EmbeddingGemma]
-    embeddings --> vectors[(rag.langchain_embeddings)]
-
-    question[User question] --> expansion[Groq multi-query generation]
-    expansion --> retrieval[pgvector similarity retrieval]
-    vectors --> retrieval
-    documents --> enrichment[Source metadata enrichment]
-    retrieval --> enrichment
-    enrichment --> answer[Groq answer generation]
-    answer --> response[Answer + structured PDF citations]
+flowchart LR
+    Browser[Next.js workspace] -->|AI SDK data stream| API[FastAPI /api/v1/chat]
+    API --> Queries[Query expansion]
+    Queries --> Search[pgvector retrieval]
+    Search --> Context[Evidence and citations]
+    Context --> Model[Groq or Ollama chat model]
+    Model --> API
+    API --> Browser
+    Storage[Supabase Storage PDFs] --> Indexer[PDF indexing]
+    Indexer --> Search
 ```
 
-The backend lives in `apps/backend`. Docker files and Compose configuration are
-kept at the repository root.
+## Repository Layout
 
-## Main Components
-
-- `apps/backend/app/configs/scrapy_digemid.py`: downloads PDFs and registers source documents.
-- `apps/backend/app/scripts/index_to_rag.py`: claims pending documents and indexes them.
-- `apps/backend/app/services/langchain_indexer.py`: parses PDFs, splits chunks, embeds them, and writes vectors.
-- `apps/backend/app/services/multiquery_retriever.py`: generates alternative queries and searches pgvector.
-- `apps/backend/app/services/rag_query.py`: builds the answer and citation response.
-- `apps/backend/app/models/`: SQLAlchemy models for the `rag` schema.
-- `apps/backend/migrations/`: database schema and RLS migrations.
+| Path | Purpose |
+| --- | --- |
+| `apps/frontend` | Next.js chat workspace and citation UI. |
+| `apps/backend` | FastAPI chat API, retrieval pipeline, ingestion, and indexing. |
+| `docker-compose.yml` | Local Ollama, API, and indexer services. |
 
 ## Requirements
 
-- Docker and Docker Compose with Compose Watch support.
-- Python 3.14 and `uv` for local backend development.
-- A Supabase project with PostgreSQL and pgvector.
-- A Groq API key for query expansion and answer generation.
-- A LangSmith API key for tracing, optional but recommended during development.
+- Python 3.14 and [uv](https://docs.astral.sh/uv/)
+- Node.js and pnpm 11
+- A Supabase PostgreSQL project with pgvector and a Storage bucket
+- Ollama with `embeddinggemma`
+- A Groq API key when `CHAT_PROVIDER=groq`
 
-Create `apps/backend/.env` locally. It is intentionally not committed:
+## Configuration
+
+Create `apps/backend/.env`:
 
 ```env
-SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_DB_URL=postgresql://<user>:<password>@<host>:5432/<database>
+SUPABASE_URL=https://<project>.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
-SUPABASE_DB_URL=postgresql://...
+
+CHAT_PROVIDER=groq
 GROQ_API_KEY=<groq-api-key>
-OLLAMA_BASE_URL=http://localhost:11434
+MODEL_NAME=qwen/qwen3.6-27b
+
 EMBEDDING_MODEL=embeddinggemma
-MULTI_QUERY_MODEL=llama-3.3-70b-versatile
-ANSWER_MODEL=llama-3.3-70b-versatile
-LANGSMITH_TRACING=true
-LANGSMITH_API_KEY=lsv2-<langsmith-api-key>
-LANGSMITH_PROJECT=rag-digemid-dev
-LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+OLLAMA_BASE_URL=http://localhost:11434
+VECTOR_COLLECTION=digemid
+CORS_ORIGINS=http://localhost:3000
 ```
 
-Never commit or print credentials. Use the regional LangSmith endpoint when
-required by the project deployment region.
+Create `apps/frontend/.env.local`:
 
-## Database Setup
-
-Apply the migrations in order:
-
-```text
-apps/backend/migrations/001_rag_ingestion.sql
-apps/backend/migrations/002_langchain_vector_store.sql
-apps/backend/migrations/003_langchain_vector_store_rls.sql
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-The important tables are:
+`SUPABASE_SERVICE_ROLE_KEY` belongs only in the backend environment. Do not expose it through `NEXT_PUBLIC_*` variables or client code.
 
-- `rag.documents`: one row per source PDF, including filename, URL, storage key, and hash.
-- `rag.langchain_embeddings`: one row per chunk, including vector, page, offsets, and parser metadata.
-- `rag.embedding_config`: active embedding model and vector dimension.
+## Run Locally
 
-## Run With Docker
-
-Start the API and Ollama:
+Start Ollama and the API with Docker:
 
 ```bash
 docker compose up --build app
 ```
 
-The API is available at `http://localhost:8000`. Ollama runs at
-`http://localhost:11434` and pulls the configured embedding model on startup.
+The compose stack starts Ollama, pulls `embeddinggemma`, verifies the model manifest, and starts the FastAPI service on port `8000`.
 
-Run the indexing profile after documents have been downloaded:
+In another terminal, start the frontend:
 
 ```bash
-docker compose --profile indexing run --rm indexer
+cd apps/frontend
+pnpm install --frozen-lockfile
+pnpm dev
 ```
 
-## Development Watch
+Open <http://localhost:3000>.
 
-Normal detached mode does not start the file watcher. Use one of these:
-
-```bash
-docker compose up --build --watch
-```
-
-Or run the watcher separately:
+For a backend-only workflow:
 
 ```bash
-docker compose up -d --build
-docker compose watch app
-```
-
-To keep it running in the background with `tmux`:
-
-```bash
-tmux new-session -d -s rag-watch 'cd /path/to/RAG && docker compose up --build --watch'
-tmux attach -t rag-watch
-```
-
-Changes under `apps/backend/app` are synchronized and restart the API. Changes
-to `apps/backend/pyproject.toml` rebuild the image.
-
-## Local Backend Commands
-
-Run these from `apps/backend`:
-
-```bash
+cd apps/backend
 uv sync --frozen
 uv run uvicorn app.main:app --reload
-uv run python -m app.scripts.downloader
-uv run python -m app.scripts.index_to_rag
+```
+
+Run Ollama separately and make `OLLAMA_BASE_URL` reachable from the API process.
+
+## Chat Behavior
+
+The frontend sends the most recent seven text messages: up to six prior turns plus the current user question. The backend uses prior turns only to resolve references in the current question, then retrieves evidence before answering.
+
+Citation links open the cited PDF page. The sources panel shows the excerpt used for the answer.
+
+## Ingestion and Indexing
+
+```mermaid
+flowchart LR
+    DIGEMID[DIGEMID source pages] --> Download[Downloader]
+    Download --> Storage[Supabase Storage]
+    Storage --> Documents[rag.documents]
+    Documents --> Index[PDF parser and embeddings]
+    Index --> Vectors[rag.langchain_embeddings]
+```
+
+Run the complete ingestion flow from `apps/backend`:
+
+```bash
 uv run ingest-digemid
 ```
 
-## API
-
-Health check:
+Index documents already marked as pending:
 
 ```bash
-curl http://localhost:8000/api/v1/health
+uv run python -m app.scripts.index_to_rag
 ```
 
-Query:
+Reset and reindex the configured collection:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/query \
-  -H 'Content-Type: application/json' \
-  -d '{"question":"What is ibuprofen used for?"}'
+uv run reindex-embeddings --yes
 ```
 
-The response contains an answer and structured citations:
+The reset command deletes collection vectors and marks documents for a clean reindex. Do not run it against a collection you need to preserve.
 
-```json
-{
-  "answer": "Ibuprofen is used for ... [S1].",
-  "citations": [
-    {
-      "id": "S1",
-      "chunk_id": "...",
-      "filename": "document.pdf",
-      "url": "https://example.org/document.pdf#page=2",
-      "page": 2,
-      "page_label": "2",
-      "total_pages": 8,
-      "start_index": 1000,
-      "end_index": 1860,
-      "text": "Retrieved chunk text..."
-    }
-  ]
-}
+## Verification
+
+```bash
+cd apps/backend
+uv run pytest -q
+
+cd ../frontend
+pnpm lint
+pnpm build
 ```
 
-`page` is one-based for PDF viewers. `start_index` and `end_index` identify the
-chunk within the source page text. The answer model is instructed to reference
-the available sources with `[S1]`, `[S2]`, and similar markers.
+## Further Reading
 
-## LangSmith Tracing
-
-When tracing is enabled, each query is recorded under the configured project:
-
-```mermaid
-sequenceDiagram
-    participant Client
-    participant API as FastAPI
-    participant Root as rag-query trace
-    participant Retrieval as multi-query-retrieval
-    participant DB as Supabase pgvector
-    participant LLM as Groq
-
-    Client->>API: POST /api/v1/query
-    API->>Root: process_query(question)
-    Root->>Retrieval: retrieve_from_pgvector()
-    Retrieval->>LLM: Generate alternative queries
-    Retrieval->>DB: Similarity search per query
-    DB-->>Retrieval: Ranked chunks
-    Retrieval-->>Root: Chunks + source metadata
-    Root->>LLM: Generate cited answer
-    LLM-->>Root: Answer with [S1], [S2]
-    Root-->>API: Answer + citations
-    API-->>Client: JSON response
-```
-
-The retrieval trace includes the enriched chunk metadata. Inspect traces in
-LangSmith to evaluate generated alternatives, retrieved pages, source chunks,
-latency, errors, and the final answer. Do not enable full input/output tracing
-for sensitive production data without reviewing the privacy requirements.
-
-## Project Status
-
-Implemented:
-
-- PDF download and Supabase Storage upload.
-- Pending-document indexing with Ollama embeddings.
-- Multi-query pgvector retrieval.
-- Groq answer generation grounded in retrieved sources.
-- Structured citations with PDF URLs, pages, and chunk offsets.
-- LangSmith tracing for query and indexing flows.
+- [Frontend guide](apps/frontend/README.md)
+- [Backend guide](apps/backend/README.md)
