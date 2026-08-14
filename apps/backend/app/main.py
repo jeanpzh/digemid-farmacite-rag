@@ -4,8 +4,10 @@ from contextlib import asynccontextmanager
 from app.dependencies.chat import create_chat_service
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
-from app.routers.chat import router as chat_router
+from app.routers.chat import limiter, router as chat_router
 from app.infraestructure.embeddings import create_embedding_service
 from app.infraestructure.llm import create_model
 from app.infraestructure.vector_store import create_vector_store
@@ -37,6 +39,8 @@ app = FastAPI(
     description = "RAG DIGEMID API for document retrieval and question answering",
     lifespan=lifespan,
 )
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 app.add_middleware(
     CORSMiddleware,

@@ -82,9 +82,16 @@ NEXT_PUBLIC_API_URL=https://api-rag.example.com
 
 # Backend Compose environment
 CORS_ORIGINS=https://rag.example.com
+FORWARDED_ALLOW_IPS=172.18.0.0/16
 ```
 
 `NEXT_PUBLIC_API_URL` is embedded when Next.js builds, so redeploy the frontend after changing it. `CORS_ORIGINS` is a comma-separated list when more than one frontend origin needs access.
+
+For Dokploy, set `FORWARDED_ALLOW_IPS` to the exact subnet of the Traefik network, not a broad private range. Retrieve it on the VPS with:
+
+```bash
+docker network inspect dokploy-network --format '{{range .IPAM.Config}}{{.Subnet}}{{end}}'
+```
 
 ## Run Locally
 
@@ -94,7 +101,7 @@ Start Ollama and the API with Docker:
 docker compose up --build app
 ```
 
-The compose stack starts Ollama, pulls `embeddinggemma`, verifies the model manifest, and starts the FastAPI service on port `8000`.
+The compose stack starts Ollama, pulls `embeddinggemma`, verifies the model manifest, and starts the FastAPI service on port `8000` bound to localhost. Ollama is also bound to localhost. In Dokploy, Traefik reaches the API through its internal container port; neither service is publicly exposed by the VPS.
 
 On a host with NVIDIA drivers and Docker GPU support, combine the GPU override with the main compose file to expose all NVIDIA GPUs to Ollama:
 
