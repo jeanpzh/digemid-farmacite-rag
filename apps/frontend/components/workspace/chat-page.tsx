@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { ChatComposer } from "@/components/workspace/chat-composer";
 import { ChatMessageList } from "@/components/workspace/chat-message-list";
@@ -13,6 +13,7 @@ import { cn } from "@/lib/utils";
 export function ChatPage() {
   const pageRef = useRef<HTMLDivElement>(null);
   const {
+    conversationId,
     error,
     isLoading,
     messages,
@@ -25,6 +26,13 @@ export function ChatPage() {
   } | null>(null);
   const [panelCitations, setPanelCitations] = useState<Citation[]>([]);
   const citationTriggerRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    setSelectedCitation(null);
+    setPanelCitations([]);
+    citationTriggerRef.current = null;
+  }, [conversationId]);
+
   const visiblePanelCitations = messages.length === 0 ? [] : panelCitations;
   const activeCitation = selectedCitation
     ? visiblePanelCitations.find(

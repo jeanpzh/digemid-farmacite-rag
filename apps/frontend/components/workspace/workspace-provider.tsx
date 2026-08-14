@@ -23,6 +23,7 @@ export type ChatMetadata = { status?: string };
 export type ChatMessage = UIMessage<ChatMetadata, RagDataParts>;
 
 type WorkspaceContextValue = {
+  conversationId: string;
   messages: ChatMessage[];
   citations: Citation[];
   retrievalStatus: RetrievalStatus | null;
@@ -66,6 +67,9 @@ const transport = new DefaultChatTransport<ChatMessage>({
 });
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
+  const [conversationId, setConversationId] = useState(() =>
+    crypto.randomUUID(),
+  );
   const [input, setInput] = useState("");
   const [retrievalStatus, setRetrievalStatus] =
     useState<RetrievalStatus | null>(null);
@@ -116,6 +120,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       stop();
     }
     setMessages([]);
+    setConversationId(crypto.randomUUID());
     setRetrievalStatus(null);
     setInput("");
   }
@@ -128,6 +133,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   return (
     <WorkspaceContext.Provider
       value={{
+        conversationId,
         messages,
         citations,
         retrievalStatus,
