@@ -1,7 +1,6 @@
 "use client";
 
-import { MessageSquarePlusIcon } from "lucide-react";
-import Link from "next/link";
+import { PlusIcon } from "lucide-react";
 import { useState } from "react";
 
 import { BrandLogo } from "@/components/brand-logo";
@@ -13,17 +12,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Sidebar,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuButton,
-  SidebarMenuItem,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { useWorkspace } from "@/components/workspace/workspace-provider";
-import { cn } from "@/lib/utils";
 
 export function WorkspaceSidebar() {
   const { startNewConversation } = useWorkspace();
@@ -36,45 +26,25 @@ export function WorkspaceSidebar() {
 
   return (
     <>
-      <Sidebar collapsible="icon" className="border-sidebar-border/70">
-        <SidebarHeader className="gap-4 p-4 group-data-[collapsible=icon]:p-2">
-          <div className="group/header relative flex items-center justify-between gap-3 px-1 group-data-[collapsible=icon]:justify-center group-data-[collapsible=icon]:gap-0">
-            <div className="flex min-w-0 items-center gap-3 group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:justify-center">
-              <BrandLogo
-                aria-hidden="true"
-                className="size-9 shrink-0 rounded-xl group-data-[collapsible=icon]:size-8 group-data-[collapsible=icon]:transition-opacity group-data-[collapsible=icon]:group-hover/header:opacity-0"
-              />
-              <p className="truncate text-md font-semibold tracking-[-0.02em] group-data-[collapsible=icon]:hidden">DIGEMID</p>
-            </div>
-            <div className="group-data-[collapsible=icon]:absolute group-data-[collapsible=icon]:left-1/2 group-data-[collapsible=icon]:-translate-x-1/2 group-data-[collapsible=icon]:opacity-0 group-data-[collapsible=icon]:transition-opacity group-data-[collapsible=icon]:group-hover/header:opacity-100">
-              <SidebarTrigger />
-            </div>
-          </div>
-          <SidebarMenu>
-            <SidebarMenuItem>
-              <SidebarMenuButton
-                render={
-                  <Link
-                    href="/chat"
-                    onClick={(event) => {
-                      event.preventDefault();
-                      setConfirmNewConversation(true);
-                    }}
-                  />
-                }
-                className="h-10 bg-brand-accent text-brand-accent-foreground hover:bg-brand-accent/90 hover:text-brand-accent-foreground group-data-[collapsible=icon]:!size-8 group-data-[collapsible=icon]:!justify-center group-data-[collapsible=icon]:!p-2"
-                size="lg"
-                tooltip="Nueva consulta"
-              >
-                <MessageSquarePlusIcon />
-                <span className="group-data-[collapsible=icon]:hidden">
-                  Nueva consulta
-                </span>
-              </SidebarMenuButton>
-            </SidebarMenuItem>
-          </SidebarMenu>
-        </SidebarHeader>
-      </Sidebar>
+      <aside
+        aria-label="Acciones de consulta"
+        className="flex w-20 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground"
+      >
+        <div className="flex h-16 items-center justify-center border-b border-sidebar-border">
+          <BrandLogo aria-hidden="true" className="size-10 rounded-lg" />
+        </div>
+        <div className="flex flex-1 items-start justify-center px-3 py-5">
+          <Button
+            aria-label="Nueva conversación"
+            className="size-11 rounded-xl bg-brand-accent text-brand-accent-foreground shadow-[0_10px_28px_-16px_rgba(142,137,123,0.9)] hover:bg-brand-accent/90 hover:text-brand-accent-foreground"
+            onClick={() => setConfirmNewConversation(true)}
+            title="Nueva conversación"
+            type="button"
+          >
+            <PlusIcon aria-hidden="true" />
+          </Button>
+        </div>
+      </aside>
       <Dialog open={confirmNewConversation} onOpenChange={setConfirmNewConversation}>
         <DialogContent showCloseButton={false}>
           <DialogHeader>

@@ -1,6 +1,7 @@
 import asyncio
 
 from langchain_core.documents import Document
+from langchain_core.retrievers import BaseRetriever
 
 import app.services.vector_retriever as vector_retriever_module
 from app.services.vector_retriever import VectorRetriever
@@ -109,9 +110,80 @@ def test_vector_retriever_batches_query_embeddings_before_pgvector_search(monkey
 
 
 def test_multiquery_retriever_keeps_lowest_distance_for_duplicates():
-    retriever = MultiqueryRetriever(vector_retriever=object())
+    retriever = MultiqueryRetriever(
+        vector_retriever=object(),
+        queries_generator=object(),
+    )
     document = Document(page_content="contenido", metadata={"page": 1})
 
     results = retriever.get_unique_union([(document, 0.6), (document, 0.2)])
 
     assert results == [(document, 0.2)]
+
+
+class QueryGenerator:
+    def __init__(self):
+        self.calls = []
+
+    async def generate_queries(self, question, history=""):
+        self.calls.append((question, history))
+        return ["consulta expandida"]
+
+
+class MultiqueryVectorRetriever:
+    k = 5
+
+    def __init__(self):
+        self.queries = None
+
+    async def retrieve_with_scores(self, queries):
+        self.queries = list(queries)
+        return [
+            (Document(page_content="relevante 1"), 0.1),
+            (Document(page_content="relevante 2"), 0.2),
+            (Document(page_content="relevante 3"), 0.3),
+            (Document(page_content="distante"), 0.9),
+        ]
+
+    async def enrich_documents(self, documents):
+        return documents
+
+
+def test_multiquery_retriever_is_native_and_selects_dynamic_results():
+    query_generator = QueryGenerator()
+    vector_retriever = MultiqueryVectorRetriever()
+    retriever = MultiqueryRetriever(
+        vector_retriever=vector_retriever,
+        queries_generator=query_generator,
+        max_distance=0.7,
+        max_results=10,
+    )
+
+    documents = asyncio.run(
+        retriever.ainvoke("pregunta", history="historial")
+    )
+
+    assert isinstance(retriever, BaseRetriever)
+    assert query_generator.calls == [("pregunta", "historial")]
+    assert vector_retriever.queries == ["pregunta", "consulta expandida"]
+    assert [document.page_content for document in documents] == [
+        "relevante 1",
+        "relevante 2",
+        "relevante 3",
+    ]
+
+
+def test_multiquery_retriever_applies_final_result_limit():
+    retriever = MultiqueryRetriever(
+        vector_retriever=MultiqueryVectorRetriever(),
+        queries_generator=QueryGenerator(),
+        max_distance=0.7,
+        max_results=2,
+    )
+
+    documents = asyncio.run(retriever.ainvoke("pregunta"))
+
+    assert [document.page_content for document in documents] == [
+        "relevante 1",
+        "relevante 2",
+    ]

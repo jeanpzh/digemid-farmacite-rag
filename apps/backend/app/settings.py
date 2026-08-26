@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     db_pool_timeout: float = 30.0
     query_count: int = 5
     retrieval_max_distance: float = Field(default=0.7, ge=0)
+    retrieval_max_results: int = Field(default=12, ge=1)
     ollama_base_url: str = "http://localhost:11434"
 
     @model_validator(mode="after")

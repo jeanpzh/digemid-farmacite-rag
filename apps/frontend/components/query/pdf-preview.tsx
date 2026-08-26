@@ -1,9 +1,22 @@
 "use client";
 
+import {
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  RotateCcwIcon,
+  ZoomInIcon,
+  ZoomOutIcon,
+} from "lucide-react";
 import { Document, Page, pdfjs } from "react-pdf";
-import type { PDFDocumentProxy } from "pdfjs-dist";
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 
+import { getDocumentPdfUrl } from "@/lib/document-url";
+import {
+  changePdfScale,
+  getAdjacentPdfPage,
+  MAX_PDF_SCALE,
+  MIN_PDF_SCALE,
+} from "@/lib/pdf-controls";
 import type { Citation } from "@/lib/validation/query";
 
 pdfjs.GlobalWorkerOptions.workerSrc = new URL(
@@ -11,7 +24,13 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
   import.meta.url
 ).toString();
 
-const documentCache = new Map<string, PDFDocumentProxy>();
+const PAGE_WIDTH = 480;
+const PDF_FRAME_CLASS =
+  "relative flex aspect-[0.78] w-full max-h-[64dvh] min-h-0 items-start justify-center overflow-auto rounded-xl border border-border bg-[#e9e4da] p-3 shadow-inner";
+
+function PdfPageFrame({ children }: { children: ReactNode }) {
+  return <div className={PDF_FRAME_CLASS}>{children}</div>;
+}
 
 function escapeHtml(value: string) {
   return value
@@ -37,7 +56,7 @@ function highlightTextLayer(text: string, snippet: string) {
   for (const term of terms) {
     html = html.replace(
       new RegExp(`(${escapeRegExp(escapeHtml(term))})`, "giu"),
-      '<mark class="bg-orange-300/70 text-inherit">$1</mark>'
+      '<mark class="bg-secondary-foreground/35 text-inherit">$1</mark>'
     );
   }
   return html;
@@ -50,61 +69,171 @@ function PreviewFallback({ citation }: { citation: Citation }) {
         Vista previa no disponible
       </p>
       <p className="text-sm leading-6 text-foreground/80">
-        Esta fuente no incluye un PDF accesible, pero este es el pasaje
-        recuperado:
+        No se pudo cargar el PDF almacenado, pero este es el pasaje recuperado:
       </p>
-      <blockquote className="border-l-2 border-orange-500/70 pl-3 text-sm leading-6 text-muted-foreground">
+      <blockquote className="border-l-2 border-secondary-foreground/70 pl-3 text-sm leading-6 text-muted-foreground">
         {citation.excerpt}
       </blockquote>
     </div>
   );
 }
 
-export function PdfPreview({ citation }: { citation: Citation }) {
-  const sourceUrl = citation.source.url;
-  const [failedSourceUrl, setFailedSourceUrl] = useState<string | null>(null);
-  const cachedDocument = sourceUrl ? documentCache.get(sourceUrl) : undefined;
-  const error = sourceUrl === failedSourceUrl;
+function PdfDocumentViewer({
+  citation,
+  pdfUrl,
+}: {
+  citation: Citation;
+  pdfUrl: string;
+}) {
+  const initialPage = Math.max(1, citation.location.page);
+  const [page, setPage] = useState(initialPage);
+  const [numPages, setNumPages] = useState<number | null>(null);
+  const [scale, setScale] = useState(1);
+  const [hasError, setHasError] = useState(false);
 
-  if (!sourceUrl || error) {
+  function renderPage() {
+    return (
+      <PdfPageFrame>
+        <Page
+          customTextRenderer={({ str }) =>
+            highlightTextLayer(str, citation.excerpt)
+          }
+          pageNumber={page}
+          renderAnnotationLayer
+          renderTextLayer
+          width={Math.round(PAGE_WIDTH * scale)}
+        />
+      </PdfPageFrame>
+    );
+  }
+
+  if (hasError) {
     return <PreviewFallback citation={citation} />;
   }
 
-  const page = Math.max(1, citation.location.page);
-  const renderPage = (pdf?: PDFDocumentProxy) => (
-    <div className="flex min-h-0 justify-center overflow-auto rounded-lg bg-white p-2 shadow-sm">
-      <Page
-        customTextRenderer={({ str }) =>
-          highlightTextLayer(str, citation.excerpt)
-        }
-        pdf={pdf}
-        pageNumber={page}
-        renderAnnotationLayer
-        renderTextLayer
-        width={260}
-      />
-    </div>
-  );
-
-  if (cachedDocument) {
-    return renderPage(cachedDocument);
-  }
-
-  return (
+  const totalPages = numPages;
+  const canGoNext = totalPages !== null && page < totalPages;
+  const controlClassName =
+    "inline-flex size-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-background hover:text-foreground disabled:pointer-events-none disabled:opacity-35 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-secondary-foreground";
+  const pdf = (
     <Document
       error={<PreviewFallback citation={citation} />}
-      file={sourceUrl}
+      file={pdfUrl}
       loading={
-        <div className="flex min-h-56 items-center justify-center rounded-lg bg-muted/30 text-sm text-muted-foreground">
-          Cargando página {page}...
-        </div>
+        <PdfPageFrame>
+          <div className="absolute inset-2 flex items-center justify-center rounded-md bg-muted/30 text-sm text-muted-foreground">
+            Cargando página {initialPage}...
+          </div>
+        </PdfPageFrame>
       }
-      onLoadError={() => setFailedSourceUrl(sourceUrl)}
+      onLoadError={() => setHasError(true)}
       onLoadSuccess={(document) => {
-        documentCache.set(sourceUrl, document);
+        setNumPages(document.numPages);
+        setPage((currentPage) =>
+          getAdjacentPdfPage(currentPage, 0, document.numPages),
+        );
       }}
     >
       {renderPage()}
     </Document>
+  );
+
+  return (
+    <div className="space-y-2">
+      <div className="rounded-xl border border-border bg-card px-2.5 py-2 shadow-sm">
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-0.5">
+            <button
+              aria-label="Página anterior"
+              className={controlClassName}
+              disabled={page <= 1}
+              onClick={() =>
+                setPage((currentPage) =>
+                  getAdjacentPdfPage(currentPage, -1, totalPages ?? 1),
+                )
+              }
+              type="button"
+            >
+              <ChevronLeftIcon className="size-4" aria-hidden="true" />
+            </button>
+            <span className="min-w-24 text-center text-[11px] font-medium tabular-nums text-foreground">
+              Página {page} de {totalPages ?? "—"}
+            </span>
+            <button
+              aria-label="Página siguiente"
+              className={controlClassName}
+              disabled={!canGoNext}
+              onClick={() =>
+                setPage((currentPage) =>
+                  getAdjacentPdfPage(currentPage, 1, totalPages ?? 1),
+                )
+              }
+              type="button"
+            >
+              <ChevronRightIcon className="size-4" aria-hidden="true" />
+            </button>
+          </div>
+          <div className="flex items-center gap-0.5 border-l border-border pl-2">
+            <button
+              aria-label="Reducir zoom"
+              className={controlClassName}
+              disabled={scale <= MIN_PDF_SCALE}
+              onClick={() => setScale((current) => changePdfScale(current, -0.25))}
+              type="button"
+            >
+              <ZoomOutIcon className="size-3.5" aria-hidden="true" />
+            </button>
+            <button
+              aria-label="Restablecer zoom"
+              className="min-h-8 min-w-12 rounded-md px-1 text-[10px] tabular-nums text-muted-foreground hover:bg-muted hover:text-foreground"
+              onClick={() => setScale(1)}
+              type="button"
+            >
+              {Math.round(scale * 100)}%
+            </button>
+            <button
+              aria-label="Aumentar zoom"
+              className={controlClassName}
+              disabled={scale >= MAX_PDF_SCALE}
+              onClick={() => setScale((current) => changePdfScale(current, 0.25))}
+              type="button"
+            >
+              <ZoomInIcon className="size-3.5" aria-hidden="true" />
+            </button>
+            <button
+              aria-label="Restablecer vista"
+              className={controlClassName}
+              onClick={() => {
+                setPage(initialPage);
+                setScale(1);
+              }}
+              type="button"
+            >
+              <RotateCcwIcon className="size-3.5" aria-hidden="true" />
+            </button>
+          </div>
+        </div>
+      </div>
+      {pdf}
+    </div>
+  );
+}
+
+export function PdfPreview({ citation }: { citation: Citation }) {
+  const pdfUrl = getDocumentPdfUrl(
+    citation.source.documentId,
+    citation.source.documentVersion,
+  );
+
+  if (!pdfUrl) {
+    return <PreviewFallback citation={citation} />;
+  }
+
+  return (
+    <PdfDocumentViewer
+      citation={citation}
+      key={`${pdfUrl}:${citation.location.page}`}
+      pdfUrl={pdfUrl}
+    />
   );
 }
