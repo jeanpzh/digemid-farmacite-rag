@@ -1,5 +1,6 @@
 from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import PromptTemplate
+from langsmith import traceable
 
 from app.configs.prompts import MULTI_QUERY_PROMPT
 from app.settings import settings
@@ -9,6 +10,7 @@ class QueryGenerator:
         self.query_generator_template = query_generator_template
         self.model = model
 
+    @traceable(name="query_expansion", run_type="chain")
     async def generate_queries(self, question: str, history: str = "") -> list[str]:
         chain = (
             self.query_generator_template

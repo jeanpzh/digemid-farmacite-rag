@@ -2,6 +2,7 @@ import asyncio
 
 from langchain_core.documents import Document
 
+import app.services.vector_retriever as vector_retriever_module
 from app.services.vector_retriever import VectorRetriever
 from app.services._multiquery_retriever import MultiqueryRetriever
 from app.dependencies.chat import create_chat_service
@@ -20,6 +21,25 @@ class ScoredVectorStore:
 
     def __init__(self):
         self.calls = []
+
+
+class EmbeddingService:
+    def __init__(self):
+        self.calls = []
+
+    async def aembed_documents(self, queries):
+        self.calls.append(list(queries))
+        return [[float(len(query))] for query in queries]
+
+
+class VectorSearchStore:
+    def __init__(self):
+        self.embeddings = EmbeddingService()
+        self.calls = []
+
+    async def asimilarity_search_with_score_by_vector(self, embedding, **kwargs):
+        self.calls.append((embedding, kwargs))
+        return [(Document(page_content="resultado"), 0.2)]
 
 
 def test_vector_retriever_limits_search_to_configured_collection():
@@ -58,6 +78,33 @@ def test_vector_retriever_returns_scored_collection_filtered_results():
     assert vector_store.calls == [
         ("consulta uno", {"k": 3, "filter": {"collection": "digemid"}}),
         ("consulta dos", {"k": 3, "filter": {"collection": "digemid"}}),
+    ]
+
+
+def test_vector_retriever_batches_query_embeddings_before_pgvector_search(monkeypatch):
+    monkeypatch.setattr(
+        vector_retriever_module,
+        "_embed_queries",
+        vector_retriever_module._embed_queries.__wrapped__,
+    )
+    monkeypatch.setattr(
+        vector_retriever_module,
+        "_search_by_vector",
+        vector_retriever_module._search_by_vector.__wrapped__,
+    )
+    vector_store = VectorSearchStore()
+    retriever = VectorRetriever(vector_store, k=3, collection="digemid")
+
+    results = asyncio.run(retriever.retrieve_with_scores(["uno", "dos"]))
+
+    assert [document.page_content for document, _ in results] == [
+        "resultado",
+        "resultado",
+    ]
+    assert vector_store.embeddings.calls == [["uno", "dos"]]
+    assert vector_store.calls == [
+        ([3.0], {"k": 3, "filter": {"collection": "digemid"}}),
+        ([3.0], {"k": 3, "filter": {"collection": "digemid"}}),
     ]
 
 

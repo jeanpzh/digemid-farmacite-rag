@@ -15,6 +15,19 @@ uv run uvicorn app.main:app --reload
 
 The API listens on `http://localhost:8000`. `SUPABASE_DB_URL` is required at startup. When `CHAT_PROVIDER=groq`, `GROQ_API_KEY` is also required.
 
+## Observability
+
+The chat pipeline emits nested LangSmith traces for the request, query expansion, retrieval, the batched query embeddings, each pgvector search, metadata lookup, context building, and streamed answer generation. Set these variables to enable them:
+
+```env
+LANGSMITH_TRACING=true
+LANGSMITH_API_KEY=<langsmith-api-key>
+LANGSMITH_PROJECT=digemid-rag
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+```
+
+The `TTFT` child span ends at the first non-empty answer chunk; `answer_generation` covers the complete answer stream. Tracing is disabled by default.
+
 ## Request Flow
 
 ```mermaid
@@ -95,6 +108,10 @@ The response uses the AI SDK data-stream media type. Events include retrieval st
 | `VECTOR_COLLECTION` | No | `digemid` | pgvector collection name. |
 | `RETRIEVAL_MAX_DISTANCE` | No | `0.7` | Maximum accepted vector distance. |
 | `CORS_ORIGINS` | No | `http://localhost:3000` | Comma-separated frontend origins allowed to call the API. |
+| `LANGSMITH_TRACING` | No | `false` | Enable nested LangSmith traces for the chat pipeline. |
+| `LANGSMITH_API_KEY` | When tracing | None | LangSmith API key. |
+| `LANGSMITH_PROJECT` | No | `digemid-rag` | LangSmith project name. |
+| `LANGSMITH_ENDPOINT` | No | `https://api.smith.langchain.com` | LangSmith API endpoint. |
 
 The vector schema requires 768-dimensional embeddings. Changing the embedding model or its dimension requires a compatible collection and a full reindex.
 

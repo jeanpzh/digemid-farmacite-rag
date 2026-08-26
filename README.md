@@ -59,12 +59,18 @@ EMBEDDING_MODEL=embeddinggemma
 OLLAMA_BASE_URL=http://localhost:11434
 VECTOR_COLLECTION=digemid
 CORS_ORIGINS=http://localhost:3000
+
+# Optional LangSmith tracing
+LANGSMITH_TRACING=false
+LANGSMITH_API_KEY=<langsmith-api-key>
+LANGSMITH_PROJECT=digemid-rag
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
 ```
 
 Create `apps/frontend/.env.local`:
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
+BACKEND_API_URL=http://127.0.0.1:8000
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY` belongs only in the backend environment. Do not expose it through `NEXT_PUBLIC_*` variables or client code.
@@ -78,14 +84,14 @@ Configure the variables that the applications actually read:
 
 ```env
 # Frontend deployment environment
-NEXT_PUBLIC_API_URL=https://api-rag.example.com
+BACKEND_API_URL=https://api-rag.example.com
 
 # Backend Compose environment
 CORS_ORIGINS=https://rag.example.com
 FORWARDED_ALLOW_IPS=172.18.0.0/16
 ```
 
-`NEXT_PUBLIC_API_URL` is embedded when Next.js builds, so redeploy the frontend after changing it. `CORS_ORIGINS` is a comma-separated list when more than one frontend origin needs access.
+`BACKEND_API_URL` is used by the Next.js server-side rewrite, so redeploy the frontend after changing it. `CORS_ORIGINS` is a comma-separated list when more than one frontend origin needs access.
 
 For Dokploy, set `FORWARDED_ALLOW_IPS` to the exact subnet of the Traefik network, not a broad private range. Retrieve it on the VPS with:
 
@@ -101,7 +107,7 @@ Start Ollama and the API with Docker:
 docker compose up --build app
 ```
 
-The compose stack starts Ollama, pulls `embeddinggemma`, verifies the model manifest, and starts the FastAPI service on port `8000` bound to localhost. Ollama is also bound to localhost. In Dokploy, Traefik reaches the API through its internal container port; neither service is publicly exposed by the VPS.
+The compose stack starts Ollama, pulls `embeddinggemma`, verifies the model manifest, and starts the FastAPI service on host port `8000`. Ollama remains bound to localhost. Keep port `8000` behind a firewall or private network when running on a shared host. In Dokploy, Traefik reaches the API through its internal container port.
 
 On a host with NVIDIA drivers and Docker GPU support, combine the GPU override with the main compose file to expose all NVIDIA GPUs to Ollama:
 
@@ -134,6 +140,38 @@ Run Ollama separately and make `OLLAMA_BASE_URL` reachable from the API process.
 The frontend sends the most recent seven text messages: up to six prior turns plus the current user question. The backend uses prior turns only to resolve references in the current question, then retrieves evidence before answering.
 
 Citation links open the cited PDF page. The sources panel shows the excerpt used for the answer.
+
+## Observability and Retrieval Performance
+
+When LangSmith tracing is enabled, each chat request is recorded as a nested trace:
+
+```text
+rag_request
+├── query_expansion
+├── retrieval
+│   ├── query_embedding_batch
+│   ├── pgvector_search   (one span per expanded query)
+│   └── metadata_query
+├── context_build
+└── answer_generation
+    └── TTFT
+```
+
+The retriever batches all expanded-query embeddings into one Ollama embedding request, then runs the individual pgvector searches concurrently. This avoids one embedding HTTP request per expanded query while preserving visibility into each search and its latency. The retrieval flow also deduplicates repeated chunks before building the answer context.
+
+Local traces improved from approximately 12.8 seconds before batching to 7.1 seconds after batching, with later warm runs around 5.1 seconds. These values vary with model warm-up, GPU availability, network latency, and the Supabase connection. The trace measures connection checkout and result handling around `metadata_query`; use `EXPLAIN (ANALYZE, BUFFERS)` separately to measure PostgreSQL statement execution.
+
+To verify that the API is running locally:
+
+```bash
+curl -fsS http://localhost:8000/api/v1/health
+```
+
+For local Ollama GPU usage, start the API with the NVIDIA Compose override:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build app
+```
 
 ## Ingestion and Indexing
 
