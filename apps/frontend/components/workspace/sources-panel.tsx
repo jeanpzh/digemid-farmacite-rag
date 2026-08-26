@@ -1,16 +1,22 @@
 "use client";
 
 import {
-  ArrowLeftIcon,
   ArrowRightIcon,
-  CheckIcon,
-  CopyIcon,
   ExternalLinkIcon,
   XIcon,
 } from "lucide-react";
+import dynamic from "next/dynamic";
 import { useEffect, useState } from "react";
 
 import { useIsMobile } from "@/hooks/use-mobile";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselNext,
+  CarouselPrevious,
+  type CarouselApi,
+} from "@/components/ui/carousel";
 import {
   Sheet,
   SheetContent,
@@ -20,6 +26,22 @@ import {
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
 import type { Citation } from "@/lib/validation/rag-stream";
+import { getCitationDocumentType } from "@/lib/workspace-view-model";
+
+const PdfPreview = dynamic(
+  () =>
+    import("@/components/query/pdf-preview").then(
+      (module) => module.PdfPreview,
+    ),
+  {
+    ssr: false,
+    loading: () => (
+      <div className="flex aspect-[0.78] w-full items-center justify-center rounded-xl border border-border bg-muted/40 text-xs text-muted-foreground">
+        Cargando PDF...
+      </div>
+    ),
+  },
+);
 
 type SourcesPanelProps = {
   activeCitation: Citation | null;
@@ -30,12 +52,10 @@ type SourcesPanelProps = {
 
 function CitationSource({
   citation,
-  index,
   onSelect,
   selected,
 }: {
   citation: Citation;
-  index: number;
   onSelect: () => void;
   selected: boolean;
 }) {
@@ -43,28 +63,34 @@ function CitationSource({
     <button
       aria-current={selected ? "true" : undefined}
       className={cn(
-        "flex w-full items-start gap-3 border-b border-sidebar-border/70 px-4 py-4 text-left transition-colors",
-        "hover:bg-sidebar-accent/60 focus-visible:bg-sidebar-accent/60",
-        selected && "bg-secondary-foreground/6",
+        "group flex w-full flex-col gap-3 rounded-xl border p-3 text-left transition-[border-color,background-color,transform] duration-200",
+        "border-sidebar-border/70 bg-background/35 hover:-translate-y-0.5 hover:border-brand-accent hover:bg-secondary hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent",
+        selected && "border-secondary-foreground/80 bg-secondary-foreground/8",
       )}
       onClick={onSelect}
       type="button"
     >
-      <span
-        className={cn(
-          "mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full text-xs font-semibold",
-          selected
-            ? "bg-secondary-foreground text-background"
-            : "bg-secondary-foreground/15 text-secondary-foreground",
-        )}
-      >
-        {index + 1}
+      <span className="flex items-center justify-between gap-2">
+        <span
+          className={cn(
+            "flex size-7 items-center justify-center rounded-lg text-[11px] font-semibold",
+            selected
+              ? "bg-secondary-foreground text-background"
+              : "bg-secondary-foreground/12 text-secondary-foreground",
+          )}
+        >
+          {citation.label.replace(/^S/, "")}
+        </span>
+        <ArrowRightIcon
+          className="size-3.5 text-muted-foreground transition-transform duration-200 group-hover:translate-x-0.5 group-hover:text-secondary-foreground"
+          aria-hidden="true"
+        />
       </span>
-      <span className="min-w-0 flex-1">
-        <span className="block truncate text-sm font-medium text-foreground">
+      <span className="min-w-0">
+        <span className="block truncate text-xs font-semibold text-foreground">
           {citation.source.filename || `Fuente ${citation.label}`}
         </span>
-        <span className="mt-1 block text-xs text-muted-foreground">
+        <span className="mt-1 block text-[11px] text-muted-foreground">
           Página {citation.location.pageLabel ?? citation.location.page}
         </span>
       </span>
@@ -72,61 +98,97 @@ function CitationSource({
   );
 }
 
-function SourceDetails({ citation }: { citation: Citation }) {
-  const [copied, setCopied] = useState(false);
-  const [copyError, setCopyError] = useState(false);
-  const sourceUrl = citation.source.url;
-  const citedPageUrl = sourceUrl
-    ? `${sourceUrl}#page=${citation.location.page}`
-    : null;
+function CitationIndexRail({
+  activeCitation,
+  citations,
+  onSelect,
+}: {
+  activeCitation: Citation;
+  citations: Citation[];
+  onSelect: (citation: Citation) => void;
+}) {
+  return (
+    <nav
+      aria-label="Índice de evidencia"
+      className="relative hidden min-h-0 flex-col items-center overflow-y-auto border-r border-border bg-card/55 px-2 py-5 lg:flex"
+    >
+      <div className="absolute top-8 bottom-8 left-1/2 w-px -translate-x-1/2 bg-brand-accent/35" aria-hidden="true" />
+      <div className="relative flex flex-col gap-2.5">
+        {citations.map((citation) => {
+          const selected = citation.id === activeCitation.id;
+          return (
+            <button
+              aria-current={selected ? "true" : undefined}
+              aria-label={`Abrir evidencia ${citation.label}`}
+              className={cn(
+                "flex size-8 items-center justify-center rounded-full border bg-card text-[11px] font-semibold tabular-nums text-muted-foreground transition-[background-color,border-color,color,transform] hover:scale-105 hover:border-brand-accent hover:bg-secondary hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent",
+                selected && "border-brand-accent bg-brand-accent text-brand-accent-foreground shadow-sm",
+              )}
+              key={citation.id}
+              onClick={() => onSelect(citation)}
+              type="button"
+            >
+              {citation.label.replace(/^S/, "")}
+            </button>
+          );
+        })}
+      </div>
+    </nav>
+  );
+}
 
-  async function copyUrl() {
-    if (!sourceUrl) return;
-    try {
-      if (!navigator.clipboard) throw new Error("Clipboard unavailable");
-      await navigator.clipboard.writeText(sourceUrl);
-      setCopyError(false);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1600);
-    } catch {
-      setCopyError(true);
-    }
-  }
+function CitationCarousel({
+  activeCitation,
+  citations,
+  onSelect,
+}: {
+  activeCitation: Citation;
+  citations: Citation[];
+  onSelect: (citation: Citation) => void;
+}) {
+  const [api, setApi] = useState<CarouselApi>();
+  const activeIndex = citations.findIndex(
+    (citation) => citation.id === activeCitation.id,
+  );
+
+  useEffect(() => {
+    if (!api || activeIndex < 0) return;
+    if (api.selectedScrollSnap() !== activeIndex) api.scrollTo(activeIndex);
+  }, [activeIndex, api]);
 
   return (
-    <div className="flex flex-col gap-5 px-4 pb-5">
-      <div className="border-l-2 border-secondary-foreground bg-secondary-foreground/7 px-4 py-3 text-sm leading-6 text-foreground/85">
-        {citation.excerpt}
-      </div>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-        {citedPageUrl ? (
-          <a
-            className="inline-flex items-center gap-2 font-medium text-secondary-foreground underline-offset-4 hover:underline focus-visible:underline"
-            href={citedPageUrl}
-            rel="noopener noreferrer"
-            target="_blank"
+    <Carousel
+      className="w-full px-5"
+      opts={{ align: "start", containScroll: "trimSnaps" }}
+      setApi={(nextApi) => setApi(() => nextApi)}
+    >
+      <CarouselContent className="-ml-2">
+        {citations.map((citation) => (
+          <CarouselItem
+            className="basis-[82%] pl-2 sm:basis-[68%]"
+            key={citation.id}
           >
-            Abrir página citada
-            <ExternalLinkIcon className="size-4" aria-hidden="true" />
-          </a>
-        ) : null}
-        {sourceUrl ? (
-          <button
-            className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground"
-            onClick={() => void copyUrl()}
-            type="button"
-          >
-            {copied ? <CheckIcon className="size-4" /> : <CopyIcon className="size-4" />}
-            {copied ? "Enlace copiado" : "Copiar enlace"}
-          </button>
-        ) : null}
-      </div>
-      {copyError ? (
-        <p className="text-xs text-destructive" role="status">
-          No se pudo copiar el enlace.
-        </p>
+            <CitationSource
+              citation={citation}
+              onSelect={() => onSelect(citation)}
+              selected={citation.id === activeCitation.id}
+            />
+          </CarouselItem>
+        ))}
+      </CarouselContent>
+      {citations.length > 1 ? (
+        <>
+          <CarouselPrevious
+            aria-label="Evidencia anterior"
+            className="-left-1 size-7"
+          />
+          <CarouselNext
+            aria-label="Evidencia siguiente"
+            className="-right-1 size-7"
+          />
+        </>
       ) : null}
-    </div>
+    </Carousel>
   );
 }
 
@@ -140,66 +202,77 @@ function SourceContent({
     ? citations.findIndex((citation) => citation.id === activeCitation.id)
     : -1;
 
-  function selectByOffset(offset: number) {
-    const citation = citations[activeIndex + offset];
-    if (!citation) return;
-    onSelect(citation);
-  }
-
   return (
     <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden">
-      <div className="flex items-start justify-between gap-4 px-4 pb-4">
-        <div>
-          <h2 className="text-base font-semibold tracking-[-0.02em]">Fuentes consultadas</h2>
+      <header className="flex shrink-0 items-start justify-between gap-4 border-b border-border bg-card/50 px-5 py-5">
+        <div className="min-w-0">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-brand-accent">
+            Evidencia {String(activeIndex + 1).padStart(2, "0")} de {String(citations.length).padStart(2, "0")}
+          </p>
+          <h2 className="mt-2 truncate font-editorial text-xl font-semibold tracking-[-0.025em] text-foreground">
+            {activeCitation?.source.filename ?? "Revisión de fuentes"}
+          </h2>
           <p className="mt-1 text-xs text-muted-foreground">
-            {citations.length} {citations.length === 1 ? "fuente" : "fuentes"}
+            {activeCitation
+              ? `${getCitationDocumentType(activeCitation.source.filename)} · Página ${activeCitation.location.pageLabel ?? activeCitation.location.page}${activeCitation.location.totalPages ? ` de ${activeCitation.location.totalPages}` : ""}`
+              : "Compruebe el pasaje exacto detrás de la respuesta."}
           </p>
         </div>
-        <button
-          aria-label="Cerrar fuentes"
-          className="flex size-8 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-sidebar-accent hover:text-foreground"
-          onClick={onClose}
-          type="button"
-        >
-          <XIcon className="size-4" aria-hidden="true" />
-        </button>
-      </div>
-      <div className="min-h-0 w-full flex-1 overflow-y-auto border-t border-sidebar-border/70">
-        {citations.map((citation, index) => (
-          <div key={citation.id} data-source-id={citation.id}>
-            <CitationSource
-              citation={citation}
-              index={index}
-              onSelect={() => onSelect(citation)}
-              selected={citation.id === activeCitation?.id}
-            />
-            {citation.id === activeCitation?.id ? <SourceDetails citation={citation} /> : null}
-          </div>
-        ))}
-      </div>
-      {activeCitation && citations.length > 1 ? (
-        <div className="flex items-center justify-between border-t border-sidebar-border/70 px-4 py-3 text-xs text-muted-foreground">
+        <div className="flex shrink-0 items-center gap-2">
+          {activeCitation?.source.url ? (
+            <a
+              aria-label="Abrir documento original"
+              className="flex size-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent"
+              href={`${activeCitation.source.url}#page=${activeCitation.location.page}`}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              <ExternalLinkIcon className="size-4" aria-hidden="true" />
+            </a>
+          ) : null}
           <button
-            className="inline-flex items-center gap-1 hover:text-foreground disabled:opacity-40"
-            disabled={activeIndex <= 0}
-            onClick={() => selectByOffset(-1)}
+            aria-label="Cerrar fuentes"
+            className="flex size-9 items-center justify-center rounded-lg border border-border bg-card text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent lg:hidden"
+            onClick={onClose}
             type="button"
           >
-            <ArrowLeftIcon className="size-3.5" /> Anterior
-          </button>
-          <span>
-            {activeIndex + 1} / {citations.length}
-          </span>
-          <button
-            className="inline-flex items-center gap-1 hover:text-foreground disabled:opacity-40"
-            disabled={activeIndex === citations.length - 1}
-            onClick={() => selectByOffset(1)}
-            type="button"
-          >
-            Siguiente <ArrowRightIcon className="size-3.5" />
+            <XIcon className="size-4" aria-hidden="true" />
           </button>
         </div>
-      ) : null}
+      </header>
+      <div className="min-h-0 w-full flex-1 overflow-y-auto">
+        {activeCitation ? (
+          <div className="space-y-5 px-4 py-4">
+            <div className="rounded-2xl border border-border bg-card/65 p-2.5 shadow-[0_18px_50px_-38px_rgba(19,36,51,0.35)]">
+              <PdfPreview
+                citation={activeCitation}
+                key={activeCitation.id}
+              />
+            </div>
+
+            <section aria-label="Fuentes de esta respuesta" className="lg:hidden">
+              <div className="mb-3 flex items-end justify-between gap-3 px-1">
+                <div>
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+                    Navegar evidencia
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Seleccione otra cita para comparar.
+                  </p>
+                </div>
+                <span className="text-[11px] tabular-nums text-muted-foreground">
+                  {activeIndex + 1} / {citations.length}
+                </span>
+              </div>
+              <CitationCarousel
+                activeCitation={activeCitation}
+                citations={citations}
+                onSelect={onSelect}
+              />
+            </section>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -230,12 +303,19 @@ export function SourcesPanel({
         id="sources-panel"
         aria-label="Fuentes consultadas"
         className={cn(
-          "hidden h-full min-h-0 w-full min-w-0 self-stretch overflow-hidden border-l border-sidebar-border/70 py-6 transition-[opacity,transform] duration-300 ease-out lg:flex",
+          "hidden h-full min-h-0 w-full min-w-0 self-stretch overflow-hidden border-l border-border bg-[#f7f3ea] transition-[opacity,transform] duration-300 ease-out lg:grid lg:grid-cols-[3.25rem_minmax(0,1fr)]",
           open
             ? "lg:translate-x-0 lg:opacity-100"
             : "pointer-events-none lg:translate-x-3 lg:opacity-0",
         )}
       >
+        {activeCitation ? (
+          <CitationIndexRail
+            activeCitation={activeCitation}
+            citations={citations}
+            onSelect={onSelect}
+          />
+        ) : null}
         <SourceContent
           activeCitation={activeCitation}
           citations={citations}

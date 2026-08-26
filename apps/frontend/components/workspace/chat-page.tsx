@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { PanelRightCloseIcon } from "lucide-react";
+import { useRef, useState } from "react";
 
 import { ChatComposer } from "@/components/workspace/chat-composer";
 import { ChatMessageList } from "@/components/workspace/chat-message-list";
@@ -9,11 +10,17 @@ import { SourcesPanel } from "@/components/workspace/sources-panel";
 import { useWorkspace } from "@/components/workspace/workspace-provider";
 import type { Citation } from "@/lib/validation/rag-stream";
 import { cn } from "@/lib/utils";
+import { getConsultationTitle } from "@/lib/workspace-view-model";
 
 export function ChatPage() {
+  const { conversationId } = useWorkspace();
+
+  return <ConversationPage key={conversationId} />;
+}
+
+function ConversationPage() {
   const pageRef = useRef<HTMLDivElement>(null);
   const {
-    conversationId,
     error,
     isLoading,
     messages,
@@ -26,12 +33,6 @@ export function ChatPage() {
   } | null>(null);
   const [panelCitations, setPanelCitations] = useState<Citation[]>([]);
   const citationTriggerRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    setSelectedCitation(null);
-    setPanelCitations([]);
-    citationTriggerRef.current = null;
-  }, [conversationId]);
 
   const visiblePanelCitations = messages.length === 0 ? [] : panelCitations;
   const activeCitation = selectedCitation
@@ -46,6 +47,7 @@ export function ChatPage() {
     .map((part) => part.text)
     .join("")
     .trim();
+  const consultationTitle = getConsultationTitle(lastUserQuestion);
 
   function selectCitation(
     citation: Citation,
@@ -79,22 +81,43 @@ export function ChatPage() {
   }
 
   return (
-    <div ref={pageRef} className="mx-auto flex min-h-0 w-full max-w-[80rem] flex-1 flex-col overflow-hidden px-4 md:px-8">
+    <div ref={pageRef} className="flex min-h-0 w-full flex-1 flex-col overflow-hidden bg-background">
+      <header className="flex h-15 shrink-0 items-center justify-between gap-4 border-b border-border bg-card/65 px-5 md:px-7">
+        <div className="flex min-w-0 items-center gap-3 text-sm">
+          <span className="shrink-0 font-medium text-muted-foreground">Consultas</span>
+          <span aria-hidden="true" className="text-border">/</span>
+          <span className="truncate font-semibold tracking-[-0.02em] text-foreground">
+            {consultationTitle}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-3">
+          {activeCitation ? (
+            <button
+              className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent"
+              onClick={closeSources}
+              type="button"
+            >
+              <PanelRightCloseIcon className="size-4" aria-hidden="true" />
+              <span className="hidden sm:inline">Colapsar evidencia</span>
+            </button>
+          ) : null}
+        </div>
+      </header>
       <div
         className={cn(
           "grid min-h-0 flex-1 grid-cols-1 grid-rows-[minmax(0,1fr)] overflow-hidden transition-[grid-template-columns,gap] duration-300 ease-out",
           visiblePanelCitations.length
             ? activeCitation
-              ? "lg:grid-cols-[minmax(0,1fr)_20rem] lg:gap-8"
+              ? "lg:grid-cols-[minmax(26rem,0.92fr)_minmax(32rem,1.08fr)]"
               : "lg:grid-cols-[minmax(0,1fr)_0rem] lg:gap-0"
             : "lg:grid-cols-1",
         )}
       >
-        <div className="flex min-h-0 min-w-0 flex-col overflow-hidden">
+        <section aria-label="Consulta" className="flex min-h-0 min-w-0 flex-col overflow-hidden">
           <div
             className={cn(
               "min-h-0 flex-1",
-              messages.length === 0 ? "overflow-y-auto pb-28" : "overflow-hidden",
+              messages.length === 0 ? "overflow-y-auto px-6" : "overflow-hidden",
             )}
           >
             {messages.length === 0 ? (
@@ -119,7 +142,8 @@ export function ChatPage() {
               </div>
             ) : null}
           </div>
-        </div>
+          <ChatComposer />
+        </section>
         <SourcesPanel
           activeCitation={activeCitation}
           citations={visiblePanelCitations}
@@ -127,12 +151,6 @@ export function ChatPage() {
           onSelect={selectPanelCitation}
         />
       </div>
-      <ChatComposer
-        className={cn(
-          "[left:var(--workspace-sidebar-offset)]",
-          activeCitation ? "lg:right-[calc(20rem+2rem)]" : "lg:right-0",
-        )}
-      />
     </div>
   );
 }

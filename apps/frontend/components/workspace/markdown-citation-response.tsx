@@ -9,6 +9,7 @@ import {
 } from "@/lib/citation-markdown";
 import { MessageResponse } from "@/components/ai-elements/message";
 import type { ReactNode } from "react";
+import { cn } from "@/lib/utils";
 
 type TextPart = Extract<ChatMessage["parts"][number], { type: "text" }>;
 type CitationPartData = Extract<
@@ -21,12 +22,14 @@ export function MarkdownCitationResponse({
   isStreaming,
   active,
   activeCitationId,
+  className,
   onCitationClick,
   messageId,
   text,
 }: {
   active: boolean;
   activeCitationId: string | null;
+  className?: string;
   citations: Citation[];
   isStreaming: boolean;
   onCitationClick: (
@@ -43,6 +46,7 @@ export function MarkdownCitationResponse({
 
   return (
     <MessageResponse
+      className={cn(className)}
       components={{
         a: ({ children, href, node: _node, ...props }) => {
           void _node;
