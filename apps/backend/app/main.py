@@ -8,10 +8,12 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from app.routers.chat import limiter, router as chat_router
+from app.routers.documents import router as documents_router
 from app.infraestructure.embeddings import create_embedding_service
 from app.infraestructure.llm import create_model
 from app.infraestructure.vector_store import create_vector_store
 from app.db import engine, vector_engine
+from app.services.document_files import DocumentFileService
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -21,6 +23,7 @@ async def lifespan(app: FastAPI):
     embedding_service = create_embedding_service()
 
     model = create_model()
+    metadata_engine = engine()
 
     vector_store = create_vector_store(
         engine=pg_engine,
@@ -29,7 +32,10 @@ async def lifespan(app: FastAPI):
     app.state.chat_service = create_chat_service(
         vector_store=vector_store,
         model=model,
-        metadata_engine=engine(),
+        metadata_engine=metadata_engine,
+    )
+    app.state.document_file_service = DocumentFileService(
+        metadata_engine=metadata_engine,
     )
     yield
 
@@ -55,6 +61,7 @@ app.add_middleware(
 )
 
 app.include_router(chat_router, prefix="/api/v1")
+app.include_router(documents_router, prefix="/api/v1")
 
 @app.get("/api/v1/health")
 async def health() -> dict[str, str]:
