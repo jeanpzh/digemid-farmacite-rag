@@ -141,6 +141,38 @@ The frontend sends the most recent seven text messages: up to six prior turns pl
 
 Citation links open the cited PDF page. The sources panel shows the excerpt used for the answer.
 
+## Observability and Retrieval Performance
+
+When LangSmith tracing is enabled, each chat request is recorded as a nested trace:
+
+```text
+rag_request
+├── query_expansion
+├── retrieval
+│   ├── query_embedding_batch
+│   ├── pgvector_search   (one span per expanded query)
+│   └── metadata_query
+├── context_build
+└── answer_generation
+    └── TTFT
+```
+
+The retriever batches all expanded-query embeddings into one Ollama embedding request, then runs the individual pgvector searches concurrently. This avoids one embedding HTTP request per expanded query while preserving visibility into each search and its latency. The retrieval flow also deduplicates repeated chunks before building the answer context.
+
+Local traces improved from approximately 12.8 seconds before batching to 7.1 seconds after batching, with later warm runs around 5.1 seconds. These values vary with model warm-up, GPU availability, network latency, and the Supabase connection. The trace measures connection checkout and result handling around `metadata_query`; use `EXPLAIN (ANALYZE, BUFFERS)` separately to measure PostgreSQL statement execution.
+
+To verify that the API is running locally:
+
+```bash
+curl -fsS http://localhost:8000/api/v1/health
+```
+
+For local Ollama GPU usage, start the API with the NVIDIA Compose override:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build app
+```
+
 ## Ingestion and Indexing
 
 ```mermaid
