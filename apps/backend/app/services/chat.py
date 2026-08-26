@@ -13,19 +13,13 @@ from app.schemas.chat_events import (
 )
 from app.services.citations import build_citations
 from app.services.observability import stream_with_ttft
-from app.settings import settings
 
 MAX_HISTORY_MESSAGES = 6
 
 
 @runtime_checkable
-class QueryExpander(Protocol):
-    async def generate_queries(self, question: str, history: str = "") -> list[str]: ...
-
-
-@runtime_checkable
 class DocumentRetriever(Protocol):
-    async def retrieve(self, queries: list[str]) -> list[tuple[Document, float]]: ...
+    async def ainvoke(self, query: str, *, history: str = "") -> list[Document]: ...
 
 
 @runtime_checkable
@@ -65,12 +59,10 @@ def format_history(messages: Sequence[BaseMessage]) -> str:
 class ChatService:
     def __init__(
         self,
-        queries_generator: QueryExpander,
         document_retriever: DocumentRetriever,
         context_formatter: ContextFormatter,
         answer_streamer: AnswerStreamer,
     ):
-        self._queries_generator = queries_generator
         self._document_retriever = document_retriever
         self._context_formatter = context_formatter
         self._answer_streamer = answer_streamer
@@ -86,12 +78,10 @@ class ChatService:
         )
 
         try:
-            generated_queries = await self._queries_generator.generate_queries(
+            documents = await self._document_retriever.ainvoke(
                 question,
                 history=history,
             )
-            queries = list(dict.fromkeys([question, *generated_queries]))
-            results = await self._document_retriever.retrieve(queries)
         except Exception:
             yield RetrievalStatusChanged(
                 phase="retrieval",
@@ -100,11 +90,6 @@ class ChatService:
             )
             raise
 
-        documents = [
-            document
-            for document, distance in results
-            if distance <= settings.retrieval_max_distance
-        ]
         yield RetrievalStatusChanged(
             phase="retrieval",
             state="complete",

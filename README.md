@@ -58,6 +58,8 @@ MODEL_NAME=qwen/qwen3.6-27b
 EMBEDDING_MODEL=embeddinggemma
 OLLAMA_BASE_URL=http://localhost:11434
 VECTOR_COLLECTION=digemid
+RETRIEVAL_MAX_DISTANCE=0.7
+RETRIEVAL_MAX_RESULTS=12
 CORS_ORIGINS=http://localhost:3000
 
 # Optional LangSmith tracing
@@ -157,7 +159,7 @@ rag_request
     └── TTFT
 ```
 
-The retriever batches all expanded-query embeddings into one Ollama embedding request, then runs the individual pgvector searches concurrently. This avoids one embedding HTTP request per expanded query while preserving visibility into each search and its latency. The retrieval flow also deduplicates repeated chunks before building the answer context.
+The retriever is exposed through LangChain's `BaseRetriever` interface, so callers use the standard `ainvoke(question)` API. Internally it batches all expanded-query embeddings into one Ollama embedding request, then runs the individual pgvector searches concurrently. This avoids one embedding HTTP request per expanded query while preserving visibility into each search and its latency. The retrieval flow deduplicates repeated chunks, filters by `RETRIEVAL_MAX_DISTANCE`, and returns up to `RETRIEVAL_MAX_RESULTS`; the final quantity is therefore dynamic rather than always exactly five.
 
 Local traces improved from approximately 12.8 seconds before batching to 7.1 seconds after batching, with later warm runs around 5.1 seconds. These values vary with model warm-up, GPU availability, network latency, and the Supabase connection. The trace measures connection checkout and result handling around `metadata_query`; use `EXPLAIN (ANALYZE, BUFFERS)` separately to measure PostgreSQL statement execution.
 

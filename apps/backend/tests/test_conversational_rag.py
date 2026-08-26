@@ -69,20 +69,10 @@ def test_context_builder_formats_source_identifiers_and_metadata():
 def test_chat_service_uses_history_for_queries_and_answers():
     captured = {}
 
-    class FakeQueryGenerator:
-        async def generate_queries(self, question, history=""):
-            captured["query_input"] = (question, history)
-            return ["funciones de DIGEMID"]
-
     class FakeRetriever:
-        async def retrieve(self, queries):
-            captured["queries"] = queries
-            return [
-                (
-                    Document(page_content="fuente", metadata={"filename": "fuente.pdf"}),
-                    0.1,
-                )
-            ]
+        async def ainvoke(self, query, *, history=""):
+            captured["retriever_input"] = (query, history)
+            return [Document(page_content="fuente", metadata={"filename": "fuente.pdf"})]
 
     class FakeContextBuilder:
         def build(self, documents):
@@ -94,7 +84,6 @@ def test_chat_service_uses_history_for_queries_and_answers():
             yield "respuesta"
 
     service = ChatService(
-        queries_generator=FakeQueryGenerator(),
         document_retriever=FakeRetriever(),
         context_formatter=FakeContextBuilder(),
         answer_streamer=FakeResponseGenerator(),
@@ -108,14 +97,10 @@ def test_chat_service_uses_history_for_queries_and_answers():
     chunks = asyncio.run(_collect(service.stream(messages)))
 
     assert chunks[-1] == TextDelta(text="respuesta")
-    assert captured["query_input"] == (
+    assert captured["retriever_input"] == (
         "¿Cuáles son sus funciones?",
         "Usuario: ¿Qué es DIGEMID?\nAsistente: Es una autoridad sanitaria.",
     )
-    assert captured["queries"] == [
-        "¿Cuáles son sus funciones?",
-        "funciones de DIGEMID",
-    ]
     assert captured["answer_input"] == {
         "question": "¿Cuáles son sus funciones?",
         "history": "Usuario: ¿Qué es DIGEMID?\nAsistente: Es una autoridad sanitaria.",
@@ -130,15 +115,12 @@ def test_chat_service_emits_status_and_citations_before_answer():
             return []
 
     class FakeRetriever:
-        async def retrieve(self, queries):
+        async def ainvoke(self, query, *, history=""):
             return [
-                (
-                    Document(
-                        id="chunk-1",
-                        page_content="Fuente verificable.",
-                        metadata={"filename": "fuente.pdf", "page": 2, "start_index": 10},
-                    ),
-                    0.1,
+                Document(
+                    id="chunk-1",
+                    page_content="Fuente verificable.",
+                    metadata={"filename": "fuente.pdf", "page": 2, "start_index": 10},
                 )
             ]
 
@@ -151,7 +133,6 @@ def test_chat_service_emits_status_and_citations_before_answer():
             yield "respuesta"
 
     service = ChatService(
-        queries_generator=FakeQueryGenerator(),
         document_retriever=FakeRetriever(),
         context_formatter=FakeContextBuilder(),
         answer_streamer=FakeResponseGenerator(),
@@ -176,7 +157,7 @@ def test_chat_service_returns_deterministic_answer_when_retrieval_is_empty():
             return []
 
     class FakeRetriever:
-        async def retrieve(self, queries):
+        async def ainvoke(self, query, *, history=""):
             return []
 
     class FailingContextBuilder:
@@ -189,7 +170,6 @@ def test_chat_service_returns_deterministic_answer_when_retrieval_is_empty():
             yield "unreachable"
 
     service = ChatService(
-        queries_generator=FakeQueryGenerator(),
         document_retriever=FakeRetriever(),
         context_formatter=FailingContextBuilder(),
         answer_streamer=FailingResponseGenerator(),
@@ -207,19 +187,10 @@ def test_chat_service_returns_deterministic_answer_when_retrieval_is_empty():
     )
 
 
-def test_chat_service_drops_distant_documents_before_context_and_citations():
-    class FakeQueryGenerator:
-        async def generate_queries(self, question, history=""):
-            return []
-
+def test_chat_service_does_not_build_context_without_documents():
     class FakeRetriever:
-        async def retrieve(self, queries):
-            return [
-                (
-                    Document(page_content="Documento distante", metadata={"filename": "irrelevante.pdf"}),
-                    99.0,
-                )
-            ]
+        async def ainvoke(self, query, *, history=""):
+            return []
 
     class FailingContextBuilder:
         def build(self, documents):
@@ -231,7 +202,6 @@ def test_chat_service_drops_distant_documents_before_context_and_citations():
             yield "unreachable"
 
     service = ChatService(
-        queries_generator=FakeQueryGenerator(),
         document_retriever=FakeRetriever(),
         context_formatter=FailingContextBuilder(),
         answer_streamer=FailingResponseGenerator(),

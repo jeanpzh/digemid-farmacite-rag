@@ -17,7 +17,10 @@ def  create_chat_service(
             vector_store,
             collection=settings.vector_collection,
             metadata_engine=metadata_engine,
-        )
+        ),
+        queries_generator=QueryGenerator(model=model),
+        max_distance=settings.retrieval_max_distance,
+        max_results=settings.retrieval_max_results,
     )
 
     response_generator = ResponseGenerator(
@@ -26,7 +29,6 @@ def  create_chat_service(
 
     return ChatService(
         context_formatter=ContextBuilder(),
-        queries_generator=QueryGenerator(model=model),
         document_retriever=retriever,
         answer_streamer=response_generator,
     )
