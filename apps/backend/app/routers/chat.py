@@ -19,7 +19,6 @@ def client_ip(request: Request) -> str:
 limiter = Limiter(key_func=client_ip, headers_enabled=True, retry_after="integer")
 
 
-@traceable(name="rag-query-1", tags=["rag", "digemid"])
 @router.post("", summary="Chat with the RAG model")
 @limiter.limit("10/minute")
 async def chat_with_rag_model(
@@ -34,6 +33,12 @@ async def chat_with_rag_model(
     )
 
 
+@traceable(
+    name="rag_request",
+    run_type="chain",
+    tags=["rag", "digemid"],
+    reduce_fn=lambda chunks: {"chunk_count": len(chunks)},
+)
 async def _stream_events(events):
     from app.adapters.vercel_ai_stream import VercelAIStream
 

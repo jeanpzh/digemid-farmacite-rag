@@ -3,6 +3,7 @@ from collections.abc import Sequence
 
 from langchain_core.documents import Document
 from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
+from langsmith import traceable
 from sqlalchemy import select
 
 from app.models.document import Document as SourceDocument
@@ -35,15 +36,45 @@ class VectorRetriever:
     ) -> list[tuple[Document, float]]:
         results = await asyncio.gather(
             *(
-                self.vector_store.asimilarity_search_with_score(
-                    query,
-                    k=self.k,
-                    filter={"collection": self.collection},
-                )
-                for query in queries
+                self._retrieve_query(query, index)
+                for index, query in enumerate(queries)
             )
         )
         return [item for result in results for item in result]
+
+    async def _retrieve_query(
+        self,
+        query: str,
+        index: int,
+    ) -> list[tuple[Document, float]]:
+        embeddings = getattr(self.vector_store, "embeddings", None)
+        search_by_vector = getattr(
+            self.vector_store,
+            "asimilarity_search_with_score_by_vector",
+            None,
+        )
+        if embeddings is None or search_by_vector is None:
+            return await _search_by_text(
+                vector_store=self.vector_store,
+                query=query,
+                k=self.k,
+                collection=self.collection,
+                query_index=index,
+            )
+
+        embedding = await _embed_query(
+            embeddings=embeddings,
+            query=query,
+            query_index=index,
+        )
+        return await _search_by_vector(
+            vector_store=self.vector_store,
+            embedding=embedding,
+            query=query,
+            k=self.k,
+            collection=self.collection,
+            query_index=index,
+        )
 
     async def enrich_documents(self, documents):
         if not documents or self.metadata_engine is None:
@@ -71,6 +102,13 @@ class VectorRetriever:
             document.metadata["document_version"] = source["doc_hash"]
         return documents
 
+    @traceable(
+        name="metadata_query",
+        run_type="tool",
+        process_inputs=lambda inputs: {
+            "doc_hash_count": len(inputs.get("doc_hashes", ())),
+        },
+    )
     def _load_source_metadata(self, doc_hashes: set[str]) -> dict[str, dict]:
         statement = select(
             SourceDocument.id,
@@ -84,3 +122,64 @@ class VectorRetriever:
         with self.metadata_engine.connect() as connection:
             rows = connection.execute(statement).mappings()
             return {row["doc_hash"]: dict(row) for row in rows}
+
+
+@traceable(
+    name="query_embedding",
+    run_type="embedding",
+    process_inputs=lambda inputs: {
+        "query": inputs.get("query"),
+        "query_index": inputs.get("query_index"),
+    },
+)
+async def _embed_query(*, embeddings, query: str, query_index: int):
+    return await embeddings.aembed_query(query)
+
+
+@traceable(
+    name="pgvector_search",
+    run_type="retriever",
+    process_inputs=lambda inputs: {
+        "query": inputs.get("query"),
+        "query_index": inputs.get("query_index"),
+        "k": inputs.get("k"),
+    },
+)
+async def _search_by_vector(
+    *,
+    vector_store,
+    embedding,
+    query: str,
+    k: int,
+    collection: str,
+    query_index: int,
+):
+    return await vector_store.asimilarity_search_with_score_by_vector(
+        embedding,
+        k=k,
+        filter={"collection": collection},
+    )
+
+
+@traceable(
+    name="pgvector_search",
+    run_type="retriever",
+    process_inputs=lambda inputs: {
+        "query": inputs.get("query"),
+        "query_index": inputs.get("query_index"),
+        "k": inputs.get("k"),
+    },
+)
+async def _search_by_text(
+    *,
+    vector_store,
+    query: str,
+    k: int,
+    collection: str,
+    query_index: int,
+):
+    return await vector_store.asimilarity_search_with_score(
+        query,
+        k=k,
+        filter={"collection": collection},
+    )

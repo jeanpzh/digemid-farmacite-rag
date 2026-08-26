@@ -12,6 +12,7 @@ from app.schemas.chat_events import (
     TextDelta,
 )
 from app.services.citations import build_citations
+from app.services.observability import stream_with_ttft
 from app.settings import settings
 
 MAX_HISTORY_MESSAGES = 6
@@ -123,10 +124,11 @@ class ChatService:
         yield CitationsAvailable(citations=build_citations(documents))
 
         context = self._context_formatter.build(documents)
-        async for chunk in self._answer_streamer.stream(
+        answer_stream = self._answer_streamer.stream(
             question=question,
             history=history,
             sources=context,
-        ):
+        )
+        async for chunk in stream_with_ttft(answer_stream):
             if chunk:
                 yield TextDelta(text=str(chunk))

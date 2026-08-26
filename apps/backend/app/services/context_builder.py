@@ -1,6 +1,8 @@
 from langchain_core.documents import Document
+from langsmith import traceable
 
 class ContextBuilder:
+    @traceable(name="context_build", run_type="chain")
     def build(self, documents: list[Document]) -> str:
         sources = []
         for index, document in enumerate(documents, start=1):

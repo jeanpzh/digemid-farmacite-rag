@@ -1,5 +1,6 @@
 
 from langchain_core.documents import Document
+from langsmith import traceable
 
 from app.services.vector_retriever import VectorRetriever
 
@@ -21,6 +22,7 @@ class MultiqueryRetriever:
                 unique_results[key] = (document, distance)
         return sorted(unique_results.values(), key=lambda result: result[1])
 
+    @traceable(name="retrieval", run_type="retriever")
     async def retrieve(self, queries: list[str]) -> list[tuple[Document, float]]:
         results = await self.vector_retriever.retrieve_with_scores(queries)
         unique_results = self.get_unique_union(results)[: self.vector_retriever.k]
