@@ -15,23 +15,23 @@ pnpm dev
 
 Open <http://localhost:3000>. The root route redirects to `/chat`.
 
-Create `.env.local` when the API is not running on the default local address:
+The browser calls the frontend origin at `/api/v1/chat`; Next.js forwards that request to the backend from the workspace server. Set the server-side backend address in `.env.local` when the API is not running on the default local address:
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
+BACKEND_API_URL=http://127.0.0.1:8000
 ```
 
-Only publish browser-safe values through `NEXT_PUBLIC_*` variables. Backend service keys never belong in this file.
+Keep `BACKEND_API_URL` server-side. Backend service keys never belong in this file.
 
 ## Deployment Environment
 
-Set the public API address in the frontend deployment environment:
+Set the backend address reachable from the Next.js server in the frontend deployment environment:
 
 ```env
-NEXT_PUBLIC_API_URL=https://api-rag.example.com
+BACKEND_API_URL=https://api-rag.example.com
 ```
 
-This is the only backend URL variable read by the frontend. Next.js embeds `NEXT_PUBLIC_*` values at build time, so changing it requires a new build and deployment.
+Next.js reads this value for its server-side rewrite, so changing it requires a new build and deployment.
 
 ## Workspace Flow
 

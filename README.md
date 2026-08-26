@@ -59,12 +59,18 @@ EMBEDDING_MODEL=embeddinggemma
 OLLAMA_BASE_URL=http://localhost:11434
 VECTOR_COLLECTION=digemid
 CORS_ORIGINS=http://localhost:3000
+
+# Optional LangSmith tracing
+LANGSMITH_TRACING=false
+LANGSMITH_API_KEY=<langsmith-api-key>
+LANGSMITH_PROJECT=digemid-rag
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
 ```
 
 Create `apps/frontend/.env.local`:
 
 ```env
-NEXT_PUBLIC_API_URL=http://localhost:8000
+BACKEND_API_URL=http://127.0.0.1:8000
 ```
 
 `SUPABASE_SERVICE_ROLE_KEY` belongs only in the backend environment. Do not expose it through `NEXT_PUBLIC_*` variables or client code.
@@ -78,14 +84,14 @@ Configure the variables that the applications actually read:
 
 ```env
 # Frontend deployment environment
-NEXT_PUBLIC_API_URL=https://api-rag.example.com
+BACKEND_API_URL=https://api-rag.example.com
 
 # Backend Compose environment
 CORS_ORIGINS=https://rag.example.com
 FORWARDED_ALLOW_IPS=172.18.0.0/16
 ```
 
-`NEXT_PUBLIC_API_URL` is embedded when Next.js builds, so redeploy the frontend after changing it. `CORS_ORIGINS` is a comma-separated list when more than one frontend origin needs access.
+`BACKEND_API_URL` is used by the Next.js server-side rewrite, so redeploy the frontend after changing it. `CORS_ORIGINS` is a comma-separated list when more than one frontend origin needs access.
 
 For Dokploy, set `FORWARDED_ALLOW_IPS` to the exact subnet of the Traefik network, not a broad private range. Retrieve it on the VPS with:
 
@@ -101,7 +107,7 @@ Start Ollama and the API with Docker:
 docker compose up --build app
 ```
 
-The compose stack starts Ollama, pulls `embeddinggemma`, verifies the model manifest, and starts the FastAPI service on port `8000` bound to localhost. Ollama is also bound to localhost. In Dokploy, Traefik reaches the API through its internal container port; neither service is publicly exposed by the VPS.
+The compose stack starts Ollama, pulls `embeddinggemma`, verifies the model manifest, and starts the FastAPI service on host port `8000`. Ollama remains bound to localhost. Keep port `8000` behind a firewall or private network when running on a shared host. In Dokploy, Traefik reaches the API through its internal container port.
 
 On a host with NVIDIA drivers and Docker GPU support, combine the GPU override with the main compose file to expose all NVIDIA GPUs to Ollama:
 

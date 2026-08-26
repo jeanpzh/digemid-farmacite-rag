@@ -39,14 +39,8 @@ type WorkspaceContextValue = {
 
 const WorkspaceContext = createContext<WorkspaceContextValue | null>(null);
 
-const configuredApiBaseUrl = process.env.NEXT_PUBLIC_API_URL;
-const apiBaseUrl = (configuredApiBaseUrl ?? "http://localhost:8000").replace(
-  /\/$/,
-  "",
-);
-
 const transport = new DefaultChatTransport<ChatMessage>({
-  api: `${apiBaseUrl}/api/v1/chat`,
+  api: "/api/v1/chat",
   prepareSendMessagesRequest({ messages, body }) {
     return {
       body: {
