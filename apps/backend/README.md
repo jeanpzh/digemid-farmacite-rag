@@ -17,7 +17,7 @@ The API listens on `http://localhost:8000`. `SUPABASE_DB_URL` is required at sta
 
 ## Observability
 
-The chat pipeline emits nested LangSmith traces for the request, query expansion, retrieval, each query embedding, pgvector search, metadata lookup, context building, and streamed answer generation. Set these variables to enable them:
+The chat pipeline emits nested LangSmith traces for the request, query expansion, retrieval, the batched query embeddings, each pgvector search, metadata lookup, context building, and streamed answer generation. Set these variables to enable them:
 
 ```env
 LANGSMITH_TRACING=true

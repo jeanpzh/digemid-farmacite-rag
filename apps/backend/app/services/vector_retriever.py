@@ -34,47 +34,57 @@ class VectorRetriever:
     async def retrieve_with_scores(
         self, queries: Sequence[str]
     ) -> list[tuple[Document, float]]:
-        results = await asyncio.gather(
-            *(
-                self._retrieve_query(query, index)
-                for index, query in enumerate(queries)
-            )
-        )
-        return [item for result in results for item in result]
+        if not queries:
+            return []
 
-    async def _retrieve_query(
-        self,
-        query: str,
-        index: int,
-    ) -> list[tuple[Document, float]]:
         embeddings = getattr(self.vector_store, "embeddings", None)
         search_by_vector = getattr(
             self.vector_store,
             "asimilarity_search_with_score_by_vector",
             None,
         )
-        if embeddings is None or search_by_vector is None:
-            return await _search_by_text(
-                vector_store=self.vector_store,
-                query=query,
-                k=self.k,
-                collection=self.collection,
-                query_index=index,
-            )
+        embed_documents = getattr(embeddings, "aembed_documents", None)
+        if embeddings is None or search_by_vector is None or embed_documents is None:
+            return await self._retrieve_without_batching(queries)
 
-        embedding = await _embed_query(
+        query_embeddings = await _embed_queries(
             embeddings=embeddings,
-            query=query,
-            query_index=index,
+            queries=queries,
         )
-        return await _search_by_vector(
-            vector_store=self.vector_store,
-            embedding=embedding,
-            query=query,
-            k=self.k,
-            collection=self.collection,
-            query_index=index,
+        results = await asyncio.gather(
+            *(
+                _search_by_vector(
+                    vector_store=self.vector_store,
+                    embedding=embedding,
+                    query=query,
+                    k=self.k,
+                    collection=self.collection,
+                    query_index=index,
+                )
+                for index, (query, embedding) in enumerate(
+                    zip(queries, query_embeddings, strict=True)
+                )
+            )
         )
+        return [item for result in results for item in result]
+
+    async def _retrieve_without_batching(
+        self,
+        queries: Sequence[str],
+    ) -> list[tuple[Document, float]]:
+        results = await asyncio.gather(
+            *(
+                _search_by_text(
+                    vector_store=self.vector_store,
+                    query=query,
+                    k=self.k,
+                    collection=self.collection,
+                    query_index=index,
+                )
+                for index, query in enumerate(queries)
+            )
+        )
+        return [item for result in results for item in result]
 
     async def enrich_documents(self, documents):
         if not documents or self.metadata_engine is None:
@@ -125,15 +135,14 @@ class VectorRetriever:
 
 
 @traceable(
-    name="query_embedding",
+    name="query_embedding_batch",
     run_type="embedding",
     process_inputs=lambda inputs: {
-        "query": inputs.get("query"),
-        "query_index": inputs.get("query_index"),
+        "query_count": len(inputs.get("queries", ())),
     },
 )
-async def _embed_query(*, embeddings, query: str, query_index: int):
-    return await embeddings.aembed_query(query)
+async def _embed_queries(*, embeddings, queries: Sequence[str]):
+    return await embeddings.aembed_documents(list(queries))
 
 
 @traceable(
