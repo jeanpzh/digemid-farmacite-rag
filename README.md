@@ -15,8 +15,10 @@ flowchart LR
     Context --> Model[Groq or Ollama chat model]
     Model --> API
     API --> Browser
-    Storage[Supabase Storage PDFs] --> Indexer[PDF indexing]
+    ObjectStore[Supabase Storage or SeaweedFS PDFs] --> Indexer[PDF indexing]
     Indexer --> Search
+    API --> DB[(PostgreSQL + pgvector)]
+    Indexer --> DB
 ```
 
 ## Repository Layout
@@ -25,15 +27,16 @@ flowchart LR
 | --- | --- |
 | `apps/frontend` | Next.js chat workspace and citation UI. |
 | `apps/backend` | FastAPI chat API, retrieval pipeline, ingestion, and indexing. |
-| `docker-compose.yml` | Local Ollama, API, and indexer services. |
+| `docker-compose.yml` | Local PostgreSQL, SeaweedFS, Ollama, API, frontend, and indexer services. |
 | `docker-compose.gpu.yml` | Optional NVIDIA GPU reservation for the Ollama service. |
 
 ## Requirements
 
 - Python 3.14 and [uv](https://docs.astral.sh/uv/)
 - Node.js and pnpm 11
-- A Supabase PostgreSQL project with pgvector and a Storage bucket
-- Ollama with `embeddinggemma`
+- Docker Compose
+- Ollama with `embeddinggemma` when using the containerized stack
+- A Supabase PostgreSQL project with pgvector and a Storage bucket only for cloud mode
 - A Groq API key when `CHAT_PROVIDER=groq`
 
 ## Configuration
@@ -44,13 +47,19 @@ Copy `.env.example` to `.env` at the repository root, then fill in the values:
 cp .env.example .env
 ```
 
-The essential variables are:
+For the local Compose stack, leave `SUPABASE_DB_URL`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY` unset. Compose provides PostgreSQL and SeaweedFS defaults:
 
 ```env
-SUPABASE_DB_URL=postgresql://<user>:<password>@<host>:5432/<database>
-SUPABASE_URL=https://<project>.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=<service-role-key>
+STORAGE_BACKEND=s3
+S3_ENDPOINT_URL=http://seaweedfs:8333
+S3_PUBLIC_ENDPOINT_URL=http://localhost:8333
+```
 
+For cloud mode, set `STORAGE_BACKEND=supabase` and configure the Supabase variables. The storage interface keeps the ingestion, indexing, and PDF-serving code independent of that choice.
+
+The remaining application variables are:
+
+```env
 CHAT_PROVIDER=groq
 GROQ_API_KEY=<groq-api-key>
 MODEL_NAME=qwen/qwen3.6-27b
@@ -103,29 +112,32 @@ docker network inspect dokploy-network --format '{{range .IPAM.Config}}{{.Subnet
 
 ## Run Locally
 
-Start Ollama and the API with Docker:
+Start the complete local stack with Docker:
 
 ```bash
-docker compose up --build app
+docker compose up --build
 ```
 
-The compose stack starts Ollama, pulls `embeddinggemma`, verifies the model manifest, and starts the FastAPI service on host port `8000`. Ollama remains bound to localhost. Keep port `8000` behind a firewall or private network when running on a shared host. In Dokploy, Traefik reaches the API through its internal container port.
+The stack starts PostgreSQL with pgvector, SeaweedFS, Ollama, the FastAPI service, and the standalone Next.js frontend. It pulls `embeddinggemma`, verifies the model manifest, and exposes the frontend at `http://localhost:3000` and the API at `http://localhost:8000`. Ollama, PostgreSQL, SeaweedFS, and the API are bound to localhost on the host. Docker services communicate through their Compose service names.
+
+If host port `5432` is already in use, start with an alternate host port, for example `POSTGRES_PORT=55432 docker compose up --build`; the backend still connects to PostgreSQL at `postgres:5432` inside Compose.
+
+The first PostgreSQL start runs the portable schema in `docker/postgres/init/`. Initialization scripts run only when the `postgres-data` volume is created. To recreate an empty local database, use `docker compose down -v` and start again.
 
 On a host with NVIDIA drivers and Docker GPU support, combine the GPU override with the main compose file to expose all NVIDIA GPUs to Ollama:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build app
+docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
 ```
 
-In another terminal, start the frontend:
+For local ingestion and indexing:
 
 ```bash
-cd apps/frontend
-pnpm install --frozen-lockfile
-pnpm dev
+docker compose run --rm app python -m app.scripts.ingest_digemid
+docker compose --profile indexing run --rm indexer
 ```
 
-Open <http://localhost:3000>.
+For frontend development with hot reload, run it outside Compose as described in `apps/frontend/README.md`; the production Compose service uses `apps/frontend/Dockerfile` and Next.js standalone output.
 
 For a backend-only workflow:
 
@@ -180,7 +192,7 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build app
 ```mermaid
 flowchart LR
     DIGEMID[DIGEMID source pages] --> Download[Downloader]
-    Download --> Storage[Supabase Storage]
+    Download --> Storage[Supabase Storage or SeaweedFS]
     Storage --> Documents[rag.documents]
     Documents --> Index[PDF parser and embeddings]
     Index --> Vectors[rag.langchain_embeddings]

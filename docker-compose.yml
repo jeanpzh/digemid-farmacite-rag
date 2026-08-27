@@ -1,4 +1,29 @@
 services:
+  postgres:
+    image: ${POSTGRES_IMAGE:-pgvector/pgvector:0.8.6-pg17-bookworm}
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-rag}
+      POSTGRES_USER: ${POSTGRES_USER:-rag}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-rag}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  seaweedfs:
+    image: chrislusf/seaweedfs:4.44@sha256:e67e8c385484120b78bff47ba5f4debbca47fbd27ed1a39f016f47e8baea615b
+    command: ["mini", "-dir=/data"]
+    ports:
+      - "127.0.0.1:${SEAWEEDFS_S3_PORT:-8333}:8333"
+    volumes:
+      - seaweed-data:/data
+
   ollama:
     image: ${OLLAMA_IMAGE:-ollama/ollama@sha256:b88c73ace3e115f8ec53dc8761ae1c0aabfa675406e3681786b98757ce050f42}
     ports:
@@ -38,6 +63,10 @@ services:
   app:
     build: .
     depends_on:
+      postgres:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_started
       ollama:
         condition: service_healthy
     develop:
@@ -49,13 +78,20 @@ services:
           path: ./apps/backend/pyproject.toml
 
     ports:
-      - "8000:8000"
+      - "127.0.0.1:${BACKEND_PORT:-8000}:8000"
     volumes:
       - app-data:/app/backend/data
     environment:
-      - SUPABASE_DB_URL=${SUPABASE_DB_URL:-}
+      - SUPABASE_DB_URL=${SUPABASE_DB_URL:-postgresql://${POSTGRES_USER:-rag}:${POSTGRES_PASSWORD:-rag}@postgres:5432/${POSTGRES_DB:-rag}}
       - SUPABASE_URL=${SUPABASE_URL:-}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+      - STORAGE_BACKEND=${STORAGE_BACKEND:-s3}
+      - STORAGE_BUCKET=${STORAGE_BUCKET:-documents}
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-http://seaweedfs:8333}
+      - S3_PUBLIC_ENDPOINT_URL=${S3_PUBLIC_ENDPOINT_URL:-http://localhost:8333}
+      - S3_REGION=${S3_REGION:-us-east-1}
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-admin}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-admin}
       - CHAT_PROVIDER=${CHAT_PROVIDER:-groq}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - MODEL_NAME=${MODEL_NAME:-qwen/qwen3.6-27b}
@@ -73,6 +109,10 @@ services:
   indexer:
     build: .
     depends_on:
+      postgres:
+        condition: service_healthy
+      seaweedfs:
+        condition: service_started
       ollama:
         condition: service_healthy
     profiles: ["indexing"]
@@ -80,9 +120,16 @@ services:
     volumes:
       - app-data:/app/backend/data
     environment:
-      - SUPABASE_DB_URL=${SUPABASE_DB_URL:-}
+      - SUPABASE_DB_URL=${SUPABASE_DB_URL:-postgresql://${POSTGRES_USER:-rag}:${POSTGRES_PASSWORD:-rag}@postgres:5432/${POSTGRES_DB:-rag}}
       - SUPABASE_URL=${SUPABASE_URL:-}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY:-}
+      - STORAGE_BACKEND=${STORAGE_BACKEND:-s3}
+      - STORAGE_BUCKET=${STORAGE_BUCKET:-documents}
+      - S3_ENDPOINT_URL=${S3_ENDPOINT_URL:-http://seaweedfs:8333}
+      - S3_PUBLIC_ENDPOINT_URL=${S3_PUBLIC_ENDPOINT_URL:-http://localhost:8333}
+      - S3_REGION=${S3_REGION:-us-east-1}
+      - S3_ACCESS_KEY_ID=${S3_ACCESS_KEY_ID:-admin}
+      - S3_SECRET_ACCESS_KEY=${S3_SECRET_ACCESS_KEY:-admin}
       - CHAT_PROVIDER=${CHAT_PROVIDER:-groq}
       - GROQ_API_KEY=${GROQ_API_KEY:-}
       - MODEL_NAME=${MODEL_NAME:-qwen/qwen3.6-27b}
@@ -96,7 +143,26 @@ services:
       - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000}
       - OLLAMA_BASE_URL=http://ollama:11434
 
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile
+      args:
+        BACKEND_API_URL: http://app:8000
+    depends_on:
+      app:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3000}:3000"
+    environment:
+      NODE_ENV: production
+      BACKEND_API_URL: http://app:8000
+
 volumes:
+  postgres-data:
+    driver: local
+  seaweed-data:
+    driver: local
   app-data:
     driver: local
   ollama-models:
