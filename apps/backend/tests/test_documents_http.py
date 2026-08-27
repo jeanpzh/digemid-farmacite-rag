@@ -52,28 +52,15 @@ class FakeEngine:
         return FakeConnection(self.row)
 
 
-class FakeStorageBucket:
+class FakeDocumentStorage:
     def __init__(self):
         self.signed_key = None
         self.signed_expiry = None
 
-    def from_(self, _bucket):
-        return self
-
-    def create_signed_url(self, storage_key, expires_in):
+    def create_download_url(self, storage_key, expires_in):
         self.signed_key = storage_key
         self.signed_expiry = expires_in
-        return {
-            "signedURL": (
-                "https://project.supabase.co/storage/v1/object/sign/"
-                "documents/digemid/hash.pdf?token=test"
-            )
-        }
-
-
-class FakeStorageClient:
-    def __init__(self):
-        self.storage = FakeStorageBucket()
+        return "https://project.supabase.co/storage/v1/object/sign/documents/digemid/hash.pdf?token=test"
 
 
 def create_client(service: FakeDocumentFileService) -> TestClient:
@@ -84,17 +71,17 @@ def create_client(service: FakeDocumentFileService) -> TestClient:
 
 
 def test_document_file_service_creates_signed_url_for_storage_key():
-    storage = FakeStorageClient()
+    storage = FakeDocumentStorage()
     service = DocumentFileService(
         metadata_engine=FakeEngine({"storage_key": "digemid/hash.pdf"}),
-        storage_client_factory=lambda: storage,
+        storage=storage,
     )
 
     pdf_url = asyncio.run(service.get_pdf_url(42, "hash"))
 
     assert pdf_url.endswith("documents/digemid/hash.pdf?token=test")
-    assert storage.storage.signed_key == "digemid/hash.pdf"
-    assert storage.storage.signed_expiry == 300
+    assert storage.signed_key == "digemid/hash.pdf"
+    assert storage.signed_expiry == 300
 
 
 def test_document_pdf_endpoint_redirects_to_signed_pdf_url():

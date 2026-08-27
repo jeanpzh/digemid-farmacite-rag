@@ -7,6 +7,7 @@ from app.db import DB_POOL_MAX_SIZE, _database_url, advisory_lock, engine, sessi
 from app.infraestructure.embeddings import create_embedding_service
 from app.models.document import Document
 from app.services.ingestion import claim_document, mark_failed, mark_indexed
+from app.services.document_storage import DocumentStorage, create_document_storage
 from app.services.langchain_indexer import (
     PARSER_VERSION,
     LangChainIndexer,
@@ -25,20 +26,17 @@ def index_pending_documents(collection: str = DEFAULT_COLLECTION) -> int:
 
 
 def _index_pending_documents(collection: str) -> int:
-    from app.configs.scrapy_digemid import get_storage_client
-
     database_url = _database_url()
 
-    bucket = os.getenv("SUPABASE_STORAGE_BUCKET", "documents")
     shared_db_engine = engine()
     worker_state = local()
     worker_indexers: list[LangChainIndexer] = []
     worker_indexers_lock = Lock()
     indexed = 0
 
-    def worker_resources() -> tuple[object, LangChainIndexer]:
+    def worker_resources() -> tuple[DocumentStorage, LangChainIndexer]:
         if not hasattr(worker_state, "indexer"):
-            worker_state.storage = get_storage_client()
+            worker_state.storage = create_document_storage()
             worker_state.indexer = LangChainIndexer(
                 database_url,
                 create_embedding_service(),
@@ -52,7 +50,7 @@ def _index_pending_documents(collection: str) -> int:
         try:
             storage, indexer = worker_resources()
             logger.info("Indexing pending PDF filename=%s", document.filename)
-            contents = storage.storage.from_(bucket).download(document.storage_key)
+            contents = storage.download(document.storage_key)
             raw_text = indexer.index_pdf(
                 contents,
                 document.filename,

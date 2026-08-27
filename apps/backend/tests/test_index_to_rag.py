@@ -62,13 +62,7 @@ def test_indexes_documents_with_bounded_concurrency(monkeypatch):
         def close(self):
             pass
 
-    storage = SimpleNamespace(
-        storage=SimpleNamespace(
-            from_=lambda _bucket: SimpleNamespace(
-                download=lambda storage_key: storage_key.encode()
-            )
-        )
-    )
+    storage = SimpleNamespace(download=lambda storage_key: storage_key.encode())
 
     monkeypatch.setattr(index_to_rag, "MAX_INDEX_WORKERS", 2)
     monkeypatch.setattr(index_to_rag, "_database_url", lambda: "postgresql://test")
@@ -84,9 +78,7 @@ def test_indexes_documents_with_bounded_concurrency(monkeypatch):
             (document_id, lease_owner, raw_text, parser_version)
         ),
     )
-    monkeypatch.setattr(
-        "app.configs.scrapy_digemid.get_storage_client", lambda: storage
-    )
+    monkeypatch.setattr(index_to_rag, "create_document_storage", lambda: storage)
 
     result = []
     thread = Thread(
@@ -131,11 +123,7 @@ def test_marks_failed_documents_and_closes_worker_indexers(monkeypatch):
         def close(self):
             closed.append(True)
 
-    storage = SimpleNamespace(
-        storage=SimpleNamespace(
-            from_=lambda _bucket: SimpleNamespace(download=lambda _key: b"broken")
-        )
-    )
+    storage = SimpleNamespace(download=lambda _key: b"broken")
 
     monkeypatch.setattr(index_to_rag, "MAX_INDEX_WORKERS", 1)
     monkeypatch.setattr(index_to_rag, "_database_url", lambda: "postgresql://test")
@@ -158,9 +146,7 @@ def test_marks_failed_documents_and_closes_worker_indexers(monkeypatch):
             (document_id, lease_owner, str(error))
         ),
     )
-    monkeypatch.setattr(
-        "app.configs.scrapy_digemid.get_storage_client", lambda: storage
-    )
+    monkeypatch.setattr(index_to_rag, "create_document_storage", lambda: storage)
 
     try:
         index_to_rag._index_pending_documents("digemid")
@@ -220,11 +206,7 @@ def test_waits_for_active_workers_before_reraising_a_failure(monkeypatch):
         def close(self):
             closed.append(True)
 
-    storage = SimpleNamespace(
-        storage=SimpleNamespace(
-            from_=lambda _bucket: SimpleNamespace(download=lambda _key: b"pdf")
-        )
-    )
+    storage = SimpleNamespace(download=lambda _key: b"pdf")
 
     monkeypatch.setattr(index_to_rag, "MAX_INDEX_WORKERS", 2)
     monkeypatch.setattr(index_to_rag, "_database_url", lambda: "postgresql://test")
@@ -247,9 +229,7 @@ def test_waits_for_active_workers_before_reraising_a_failure(monkeypatch):
             (document_id, lease_owner, raw_text, parser_version)
         ),
     )
-    monkeypatch.setattr(
-        "app.configs.scrapy_digemid.get_storage_client", lambda: storage
-    )
+    monkeypatch.setattr(index_to_rag, "create_document_storage", lambda: storage)
 
     errors = []
     thread = Thread(

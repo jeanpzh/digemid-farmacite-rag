@@ -1,7 +1,7 @@
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -11,6 +11,7 @@ DEFAULT_EMBEDDING_MODEL = "embeddinggemma"
 ROOT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 ReasoningFormat = Literal["hidden", "parsed", "raw"]
 ChatProvider = Literal["groq", "ollama"]
+StorageBackend = Literal["supabase", "s3"]
 Environment = Literal["development", "production"]
 
 class Settings(BaseSettings):
@@ -37,6 +38,16 @@ class Settings(BaseSettings):
     table_name: str = VECTOR_TABLE
     schema_name: str = VECTOR_SCHEMA
     vector_collection: str = "digemid"
+    storage_backend: StorageBackend = "supabase"
+    storage_bucket: str = Field(
+        default="documents",
+        validation_alias=AliasChoices("STORAGE_BUCKET", "SUPABASE_STORAGE_BUCKET"),
+    )
+    s3_endpoint_url: str | None = None
+    s3_public_endpoint_url: str | None = None
+    s3_region: str = "us-east-1"
+    s3_access_key_id: str | None = None
+    s3_secret_access_key: str | None = None
     metadata_columns: list[str] = [
         "collection",
         "doc_hash",
@@ -57,6 +68,8 @@ class Settings(BaseSettings):
             raise ValueError("EMBEDDING_DIMENSION must be 768 for the current vector schema")
         if self.chat_provider == "groq" and not self.groq_api_key:
             raise ValueError("GROQ_API_KEY is required when CHAT_PROVIDER=groq")
+        if self.storage_backend == "s3" and not self.s3_endpoint_url:
+            raise ValueError("S3_ENDPOINT_URL is required when STORAGE_BACKEND=s3")
         return self
 
 

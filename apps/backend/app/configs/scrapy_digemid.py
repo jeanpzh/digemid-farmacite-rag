@@ -4,12 +4,10 @@ from urllib.parse import unquote, urlparse
 
 import scrapy
 from scrapy.pipelines.files import FilesPipeline
-from sqlalchemy import func
 from sqlalchemy.dialects.postgresql import insert
-from supabase import create_client
 from app.models.document import Document
 from app.db import session_scope
-from app.settings import settings
+from app.services.document_storage import DocumentStorage, create_document_storage
 
 BOT_NAME = "digemid"
 SPIDER_NAME = "digemid_pdfs"
@@ -47,7 +45,7 @@ DIGEMID_SETTINGS = {
     "FILES_EXPIRES": 365,
     "ITEM_PIPELINES": {
         "app.configs.scrapy_digemid.DigemidFilesPipeline": 1,
-        "app.configs.scrapy_digemid.SupabaseDocumentsPipeline": 2,
+        "app.configs.scrapy_digemid.DocumentStoragePipeline": 2,
     },
     "DOCUMENT_COLLECTION": "digemid",
     "LOG_LEVEL": "INFO",
@@ -61,22 +59,20 @@ class DigemidFilesPipeline(FilesPipeline):
         return f"{key}_{filename}"
 
 
-class SupabaseDocumentsPipeline:
+class DocumentStoragePipeline:
     """Store completed downloads and queue them for the separate indexer."""
 
-    def __init__(self, storage_client, files_store: Path, bucket: str, collection: str):
-        self.storage_client = storage_client
+    def __init__(self, storage: DocumentStorage, files_store: Path, collection: str):
+        self.storage = storage
         self.files_store = files_store.resolve()
-        self.bucket = bucket
         self.collection = collection
-        self._bucket_ready = False
+        self._storage_ready = False
 
     @classmethod
     def from_crawler(cls, crawler):
         return cls(
-            get_storage_client(),
+            create_document_storage(),
             Path(crawler.settings["FILES_STORE"]),
-            crawler.settings.get("SUPABASE_STORAGE_BUCKET", "documents"),
             crawler.settings["DOCUMENT_COLLECTION"],
         )
 
@@ -99,11 +95,11 @@ class SupabaseDocumentsPipeline:
         source_url = downloaded_file["url"]
         filename = Path(unquote(urlparse(source_url).path)).name or local_path.name
 
-        self._ensure_bucket()
-        self.storage_client.storage.from_(self.bucket).upload(
+        self._ensure_storage()
+        self.storage.upload(
             storage_key,
             contents,
-            {"content-type": "application/pdf", "upsert": "true"},
+            content_type="application/pdf",
         )
 
         values = {
@@ -129,22 +125,11 @@ class SupabaseDocumentsPipeline:
             )
         local_path.unlink(missing_ok=True)
 
-    def _ensure_bucket(self) -> None:
-        if self._bucket_ready:
+    def _ensure_storage(self) -> None:
+        if self._storage_ready:
             return
-        try:
-            self.storage_client.storage.get_bucket(self.bucket)
-        except Exception:
-            self.storage_client.storage.create_bucket(self.bucket)
-        self._bucket_ready = True
-
-
-def get_storage_client():
-    supabase_url = settings.supabase_url
-    service_role_key = settings.supabase_service_role_key
-    if not supabase_url or not service_role_key:
-        raise RuntimeError("SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY must be set")
-    return create_client(supabase_url, service_role_key)
+        self.storage.ensure_bucket()
+        self._storage_ready = True
 
 
 class DigemidPdfSpider(scrapy.Spider):
