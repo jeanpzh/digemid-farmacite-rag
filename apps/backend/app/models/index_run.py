@@ -1,9 +1,6 @@
-from sqlalchemy import UUID, DateTime, String, func
-from sqlalchemy.dialects.postgresql import UUID as PGUUID
-from sqlalchemy.orm import Mapped, mapped_column
 from datetime import datetime
 from typing import Any
-from pgvector.sqlalchemy import VECTOR  
+
 from sqlalchemy import (
     JSON,
     DateTime,
@@ -11,6 +8,8 @@ from sqlalchemy import (
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID as PGUUID
+from sqlalchemy.orm import Mapped, mapped_column
+
 from app.models.base import Base
 
 class IndexRun(Base):

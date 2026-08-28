@@ -115,8 +115,10 @@ services:
         condition: service_started
       ollama:
         condition: service_healthy
-    profiles: ["indexing"]
-    command: ["python", "-m", "app.scripts.index_to_rag"]
+    command: ["python", "-m", "app.scripts.indexing_worker"]
+    restart: unless-stopped
+    healthcheck:
+      disable: true
     volumes:
       - app-data:/app/backend/data
     environment:

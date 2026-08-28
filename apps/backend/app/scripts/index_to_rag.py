@@ -2,6 +2,7 @@ import logging
 import os
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from threading import Event, Lock, local
+from collections.abc import Callable
 
 from app.db import DB_POOL_MAX_SIZE, _database_url, advisory_lock, engine, session_scope
 from app.infraestructure.embeddings import create_embedding_service
@@ -20,12 +21,18 @@ logger = logging.getLogger(__name__)
 
 
 @traceable(name="rag-index-pending-documents")
-def index_pending_documents(collection: str = DEFAULT_COLLECTION) -> int:
+def index_pending_documents(
+    collection: str = DEFAULT_COLLECTION,
+    should_continue: Callable[[], bool] | None = None,
+) -> int:
     with advisory_lock():
-        return _index_pending_documents(collection)
+        return _index_pending_documents(collection, should_continue)
 
 
-def _index_pending_documents(collection: str) -> int:
+def _index_pending_documents(
+    collection: str,
+    should_continue: Callable[[], bool] | None = None,
+) -> int:
     database_url = _database_url()
 
     shared_db_engine = engine()
@@ -112,6 +119,9 @@ def _index_pending_documents(collection: str) -> int:
 
             while futures or not exhausted:
                 while not exhausted and len(futures) < MAX_INDEX_WORKERS:
+                    if should_continue is not None and not should_continue():
+                        exhausted = True
+                        break
                     with session_scope() as session:
                         document = claim_document(session, collection)
                     if document is None:

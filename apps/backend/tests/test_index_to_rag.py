@@ -250,6 +250,32 @@ def test_waits_for_active_workers_before_reraising_a_failure(monkeypatch):
     assert closed == [True, True]
 
 
+def test_stops_claiming_when_the_job_is_paused(monkeypatch):
+    claimed = []
+
+    class FakeIndexer:
+        def __init__(self, *_args, **_kwargs):
+            pass
+
+        def close(self):
+            pass
+
+    def claim_document(_session, _collection):
+        claimed.append(True)
+        raise AssertionError("a paused job must not claim another document")
+
+    monkeypatch.setattr(index_to_rag, "MAX_INDEX_WORKERS", 1)
+    monkeypatch.setattr(index_to_rag, "_database_url", lambda: "postgresql://test")
+    monkeypatch.setattr(index_to_rag, "engine", lambda: object())
+    monkeypatch.setattr(index_to_rag, "create_embedding_service", lambda: object())
+    monkeypatch.setattr(index_to_rag, "LangChainIndexer", FakeIndexer)
+    monkeypatch.setattr(index_to_rag, "session_scope", fake_session_scope)
+    monkeypatch.setattr(index_to_rag, "claim_document", claim_document)
+
+    assert index_to_rag._index_pending_documents("digemid", lambda: False) == 0
+    assert claimed == []
+
+
 def _capture_error(call, errors):
     try:
         call()

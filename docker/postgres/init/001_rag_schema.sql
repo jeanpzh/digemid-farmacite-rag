@@ -52,3 +52,18 @@ CREATE TABLE IF NOT EXISTS rag.langchain_embeddings (
 
 CREATE INDEX IF NOT EXISTS langchain_embeddings_collection_doc_hash_idx
     ON rag.langchain_embeddings (collection, doc_hash);
+
+CREATE TABLE IF NOT EXISTS rag.index_runs (
+    run_id uuid PRIMARY KEY,
+    collection text NOT NULL CHECK (length(trim(collection)) > 0),
+    started_at timestamptz NOT NULL DEFAULT now(),
+    finished_at timestamptz,
+    status text NOT NULL
+        CHECK (status IN ('running', 'paused', 'completed', 'failed', 'cancelled')),
+    metrics jsonb NOT NULL DEFAULT '{}'::jsonb
+);
+
+CREATE INDEX IF NOT EXISTS index_runs_collection_started_at_idx
+    ON rag.index_runs (collection, started_at DESC);
+
+ALTER TABLE rag.index_runs ENABLE ROW LEVEL SECURITY;
