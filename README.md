@@ -15,9 +15,10 @@ flowchart LR
     Context --> Model[Groq or Ollama chat model]
     Model --> API
     API --> Browser
-    ObjectStore[Supabase Storage or SeaweedFS PDFs] --> Indexer[PDF indexing]
+    API -->|enqueue and control runs| DB[(PostgreSQL + pgvector)]
+    DB -->|poll persisted runs| Indexer[Indexer worker]
+    ObjectStore[Supabase Storage or SeaweedFS PDFs] --> Indexer
     Indexer --> Search
-    API --> DB[(PostgreSQL + pgvector)]
     Indexer --> DB
 ```
 
@@ -29,6 +30,8 @@ flowchart LR
 | `apps/backend` | FastAPI chat API, retrieval pipeline, ingestion, and indexing. |
 | `docker-compose.yml` | Local PostgreSQL, SeaweedFS, Ollama, API, frontend, and indexer services. |
 | `docker-compose.gpu.yml` | Optional NVIDIA GPU reservation for the Ollama service. |
+| `docker-compose.amd.yml` | Optional AMD ROCm device mappings for the Ollama service. |
+| `scripts/start.sh` | One-command startup that selects CPU, NVIDIA, or AMD automatically. |
 
 ## Requirements
 
@@ -112,30 +115,57 @@ docker network inspect dokploy-network --format '{{range .IPAM.Config}}{{.Subnet
 
 ## Run Locally
 
-Start the complete local stack with Docker:
+Start the complete local stack with the hardware-aware launcher:
 
 ```bash
-docker compose up --build
+./scripts/start.sh
 ```
 
-The stack starts PostgreSQL with pgvector, SeaweedFS, Ollama, the FastAPI service, and the standalone Next.js frontend. It pulls `embeddinggemma`, verifies the model manifest, and exposes the frontend at `http://localhost:3000` and the API at `http://localhost:8000`. Ollama, PostgreSQL, SeaweedFS, and the API are bound to localhost on the host. Docker services communicate through their Compose service names.
+The launcher reads `.env` when present and otherwise uses `.env.example`. It detects an NVIDIA GPU with `nvidia-smi`, an AMD GPU through `/dev/kfd` and `/dev/dri`, and falls back to CPU. The stack starts PostgreSQL with pgvector, SeaweedFS, Ollama, the FastAPI service, the dedicated indexing worker, and the standalone Next.js frontend. It pulls `embeddinggemma`, verifies the model manifest, and exposes the frontend at `http://localhost:3000` and the API at `http://localhost:8000`. Ollama, PostgreSQL, SeaweedFS, and the API are bound to localhost on the host. Docker services communicate through their Compose service names.
 
-If host port `5432` is already in use, start with an alternate host port, for example `POSTGRES_PORT=55432 docker compose up --build`; the backend still connects to PostgreSQL at `postgres:5432` inside Compose.
+To select a backend explicitly, use `GPU_BACKEND=auto`, `cpu`, `nvidia`, or `amd`:
+
+```bash
+GPU_BACKEND=cpu ./scripts/start.sh
+GPU_BACKEND=nvidia ./scripts/start.sh
+GPU_BACKEND=amd ./scripts/start.sh
+```
+
+If host port `5432` is already in use, start with an alternate host port, for example `POSTGRES_PORT=55432 ./scripts/start.sh`; the backend still connects to PostgreSQL at `postgres:5432` inside Compose.
 
 The first PostgreSQL start runs the portable schema in `docker/postgres/init/`. Initialization scripts run only when the `postgres-data` volume is created. To recreate an empty local database, use `docker compose down -v` and start again.
 
 On a host with NVIDIA drivers and Docker GPU support, combine the GPU override with the main compose file to expose all NVIDIA GPUs to Ollama:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+GPU_BACKEND=nvidia ./scripts/start.sh
 ```
+
+The NVIDIA path requires the NVIDIA Container Toolkit. The AMD path uses Ollama's ROCm image and requires a Linux host with a compatible ROCm/amdgpu driver and access to `/dev/kfd` and `/dev/dri`. If the host has neither supported GPU, the default launcher uses the CPU image. To inspect the selected command without starting containers, run `./scripts/start.sh --print-command`.
 
 For local ingestion and indexing:
 
 ```bash
 docker compose run --rm app python -m app.scripts.ingest_digemid
-docker compose --profile indexing run --rm indexer
 ```
+
+The indexing screen at `http://localhost:3000/indexing` uses the background indexing API. It persists each run in `rag.index_runs`, reports document status from `rag.documents`, and can pause, resume, or cancel the active run. FastAPI only writes those commands to PostgreSQL. The always-on `indexer` Compose service polls the persisted runs and performs the bounded PDF work independently, so restarting the API does not orphan an active run. PostgreSQL leases allow the worker to reclaim documents left in `processing` after their lease expires.
+
+To start indexing pending documents without the screen:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/indexing/runs \
+  -H 'Content-Type: application/json' \
+  -d '{"collection":"digemid","mode":"pending"}'
+```
+
+The response contains `run_id`. Poll it until the status is `completed`, `failed`, or `cancelled`:
+
+```bash
+curl http://localhost:8000/api/v1/indexing/runs/<run_id>
+```
+
+Control an active run with `POST /api/v1/indexing/runs/<run_id>/pause`, `/resume`, or `/cancel`. The `all` mode downloads the source PDFs before indexing; `pending` only processes documents already recorded in PostgreSQL.
 
 For frontend development with hot reload, run it outside Compose as described in `apps/frontend/README.md`; the production Compose service uses `apps/frontend/Dockerfile` and Next.js standalone output.
 
@@ -181,10 +211,16 @@ To verify that the API is running locally:
 curl -fsS http://localhost:8000/api/v1/health
 ```
 
-For local Ollama GPU usage, start the API with the NVIDIA Compose override:
+For local Ollama GPU usage, use the hardware-aware launcher:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build app
+./scripts/start.sh
+```
+
+Verify the Ollama processor after startup:
+
+```bash
+docker compose exec ollama ollama ps
 ```
 
 ## Ingestion and Indexing
@@ -217,6 +253,8 @@ uv run reindex-embeddings --yes
 ```
 
 The reset command deletes collection vectors and marks documents for a clean reindex. Do not run it against a collection you need to preserve.
+
+Cloud Supabase databases need `apps/backend/migrations/004_index_runs.sql` applied once. Fresh local PostgreSQL databases receive the same table from `docker/postgres/init/001_rag_schema.sql`.
 
 ## Verification
 

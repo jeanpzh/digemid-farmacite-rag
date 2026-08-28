@@ -1,0 +1,6 @@
+services:
+  ollama:
+    image: ${OLLAMA_AMD_IMAGE:-ollama/ollama@sha256:e4e051589e6b4f345f98672cbd4679949c8d75e619e53c3e823d3ed3b8139fec}
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
