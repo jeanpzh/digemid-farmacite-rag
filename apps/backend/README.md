@@ -103,8 +103,12 @@ The response uses the AI SDK data-stream media type. Events include retrieval st
 | `CHAT_PROVIDER` | No | `groq` | `groq` or `ollama`. |
 | `GROQ_API_KEY` | For Groq | None | Required when the chat provider is Groq. |
 | `MODEL_NAME` | No | `qwen/qwen3.6-27b` | Chat model identifier. |
-| `EMBEDDING_MODEL` | No | `embeddinggemma` | Embedding model used for indexing and search. |
-| `OLLAMA_BASE_URL` | No | `http://localhost:11434` | Ollama endpoint. |
+| `EMBEDDING_PROVIDER` | No | `bedrock` | `bedrock` or `ollama`. |
+| `EMBEDDING_MODEL` | No | `amazon.titan-embed-text-v2:0` | Embedding model used for indexing and search. |
+| `EMBEDDING_DIMENSION` | No | `1024` | Must match the `rag.langchain_embeddings` vector column size. |
+| `AWS_REGION` | For Bedrock | `us-east-2` | AWS region used for Bedrock runtime calls. |
+| `AWS_PROFILE` | No | None | Optional local AWS CLI profile; omit in production to use the IAM role. |
+| `OLLAMA_BASE_URL` | No | `http://localhost:11434` | Ollama endpoint when `EMBEDDING_PROVIDER=ollama` or `CHAT_PROVIDER=ollama`. |
 | `VECTOR_COLLECTION` | No | `digemid` | pgvector collection name. |
 | `RETRIEVAL_MAX_DISTANCE` | No | `0.7` | Maximum accepted vector distance. |
 | `CORS_ORIGINS` | No | `http://localhost:3000` | Comma-separated frontend origins allowed to call the API. |
@@ -113,7 +117,7 @@ The response uses the AI SDK data-stream media type. Events include retrieval st
 | `LANGSMITH_PROJECT` | No | `digemid-rag` | LangSmith project name. |
 | `LANGSMITH_ENDPOINT` | No | `https://api.smith.langchain.com` | LangSmith API endpoint. |
 
-The vector schema requires 768-dimensional embeddings. Changing the embedding model or its dimension requires a compatible collection and a full reindex.
+The vector schema requires 1024-dimensional embeddings. Changing the embedding model or its dimension requires a compatible collection and a full reindex.
 
 For a production frontend at `https://rag.example.com`, set:
 

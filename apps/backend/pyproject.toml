@@ -22,6 +22,8 @@ dependencies = [
     "supabase>=2.31.0",
     "uvicorn[standard]>=0.52.1",
     "slowapi>=0.1.10",
+    "langchain-aws>=1.10.0",
+    "botocore[crt]>=1.44.12",
 ]
 
 [project.scripts]

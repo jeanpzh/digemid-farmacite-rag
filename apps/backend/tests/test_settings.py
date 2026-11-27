@@ -12,12 +12,25 @@ def settings(**overrides):
 
 
 def test_embedding_dimension_accepts_environment_string_for_current_schema():
-    assert settings(embedding_dimension="768").embedding_dimension == 768
+    assert settings(embedding_dimension="1024").embedding_dimension == 1024
 
 
 def test_embedding_dimension_rejects_values_other_than_current_schema():
     with pytest.raises(ValidationError, match="EMBEDDING_DIMENSION"):
-        settings(embedding_dimension=1536)
+        settings(embedding_dimension=768)
+
+
+def test_bedrock_embedding_provider_requires_aws_region():
+    with pytest.raises(ValidationError, match="AWS_REGION"):
+        settings(embedding_provider="bedrock", aws_region="   ")
+
+
+def test_default_embedding_configuration_uses_bedrock_titan_v2():
+    configured = settings()
+    assert configured.embedding_provider == "bedrock"
+    assert configured.embedding_model == "amazon.titan-embed-text-v2:0"
+    assert configured.embedding_dimension == 1024
+    assert configured.aws_region == "us-east-2"
 
 
 def test_groq_requires_an_api_key():
