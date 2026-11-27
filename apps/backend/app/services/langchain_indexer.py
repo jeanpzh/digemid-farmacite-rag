@@ -25,7 +25,7 @@ async def close_pg_engine(engine: PGEngine) -> None:
 
 VECTOR_SCHEMA = "rag"
 VECTOR_TABLE = "langchain_embeddings"
-EMBEDDING_DIMENSION = 768
+EMBEDDING_DIMENSION = 1024
 PARSER_VERSION = "langchain-pypdf-recursive-1000-150"
 METADATA_COLUMNS = ["collection", "doc_hash", "page", "start_index"]
 CHUNK_SIZE = 1_000

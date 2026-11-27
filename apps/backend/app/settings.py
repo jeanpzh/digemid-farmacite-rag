@@ -7,10 +7,12 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 VECTOR_SCHEMA = "rag"
 VECTOR_TABLE = "langchain_embeddings"
-DEFAULT_EMBEDDING_MODEL = "embeddinggemma"
+DEFAULT_EMBEDDING_MODEL = "amazon.titan-embed-text-v2:0"
+EMBEDDING_DIMENSION = 1024
 ROOT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 ReasoningFormat = Literal["hidden", "parsed", "raw"]
 ChatProvider = Literal["groq", "ollama"]
+EmbeddingProvider = Literal["bedrock", "ollama"]
 Environment = Literal["development", "production"]
 
 class Settings(BaseSettings):
@@ -25,8 +27,11 @@ class Settings(BaseSettings):
     supabase_db_url: str = Field(...)
     supabase_url: str | None = None
     supabase_service_role_key: str | None = None
+    embedding_provider: EmbeddingProvider = "bedrock"
     embedding_model: str = DEFAULT_EMBEDDING_MODEL
-    embedding_dimension: int = 768
+    embedding_dimension: int = EMBEDDING_DIMENSION
+    aws_region: str = "us-east-2"
+    aws_profile: str | None = None
     chat_provider: ChatProvider = "groq"
     environment: Environment = "development"
     groq_api_key: str | None = None
@@ -53,8 +58,12 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def validate_runtime_configuration(self) -> "Settings":
-        if self.embedding_dimension != 768:
-            raise ValueError("EMBEDDING_DIMENSION must be 768 for the current vector schema")
+        if self.embedding_dimension != EMBEDDING_DIMENSION:
+            raise ValueError(
+                f"EMBEDDING_DIMENSION must be {EMBEDDING_DIMENSION} for the current vector schema"
+            )
+        if self.embedding_provider == "bedrock" and not self.aws_region.strip():
+            raise ValueError("AWS_REGION is required when EMBEDDING_PROVIDER=bedrock")
         if self.chat_provider == "groq" and not self.groq_api_key:
             raise ValueError("GROQ_API_KEY is required when CHAT_PROVIDER=groq")
         return self

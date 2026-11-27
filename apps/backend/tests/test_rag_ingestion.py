@@ -68,7 +68,7 @@ def test_make_embedding_records_preserves_chunk_data_and_metadata():
         },
     )
 
-    embedding = [0.25] * 768
+    embedding = [0.25] * 1024
     records = make_embedding_records([chunk], [embedding])
 
     assert records == [
@@ -142,7 +142,7 @@ def test_index_pdf_writes_all_chunks_in_database_batches(monkeypatch):
     )()
     indexer.embedding_service = type(
         "FakeEmbeddings",
-        (), {"embed_documents": lambda self, texts: [[0.0] * 768 for _ in texts]},
+        (), {"embed_documents": lambda self, texts: [[0.0] * 1024 for _ in texts]},
     )()
 
     monkeypatch.setattr(
