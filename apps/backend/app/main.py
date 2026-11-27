@@ -10,7 +10,7 @@ from slowapi.errors import RateLimitExceeded
 from app.routers.chat import limiter, router as chat_router
 from app.routers.documents import router as documents_router
 from app.infraestructure.embeddings import create_embedding_service
-from app.infraestructure.llm import create_model
+from app.infraestructure.llm import create_model, create_router_model
 from app.infraestructure.vector_store import create_vector_store
 from app.db import engine, vector_engine
 from app.services.document_files import DocumentFileService
@@ -23,6 +23,7 @@ async def lifespan(app: FastAPI):
     embedding_service = create_embedding_service()
 
     model = create_model()
+    router_model = create_router_model()
     metadata_engine = engine()
 
     vector_store = create_vector_store(
@@ -32,6 +33,7 @@ async def lifespan(app: FastAPI):
     app.state.chat_service = create_chat_service(
         vector_store=vector_store,
         model=model,
+        router_model=router_model,
         metadata_engine=metadata_engine,
     )
     app.state.document_file_service = DocumentFileService(

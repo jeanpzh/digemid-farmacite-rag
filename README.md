@@ -9,9 +9,10 @@ Cited RAG assistant for Peruvian OTC pharmaceutical documentation (DIGEMID). Ret
 ```mermaid
 flowchart LR
     UI[Next.js UI] -->|AI SDK stream| API[FastAPI /api/v1/chat]
-    API --> Embed[Bedrock Titan V2 / Ollama]
-    Embed --> DB[(Supabase pgvector)]
-    DB --> LLM[Groq / Ollama LLM]
+    API --> Router[Bedrock Nova Micro / Groq Router]
+    Router --> Embed[Bedrock Titan V2 / Ollama]
+    Embed --> DB[(Supabase pgvector HNSW)]
+    DB --> LLM[Bedrock / Groq / Ollama LLM]
     LLM --> UI
 ```
 

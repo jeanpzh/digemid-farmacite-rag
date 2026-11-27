@@ -46,3 +46,16 @@ def test_production_accepts_groq_configuration():
     )
 
     assert configured.chat_provider == "groq"
+
+
+def test_bedrock_chat_provider_does_not_require_groq_api_key():
+    configured = settings(
+        chat_provider="bedrock",
+        model_name="us.amazon.nova-lite-v1:0",
+        router_model_name="us.amazon.nova-micro-v1:0",
+        groq_api_key="",
+    )
+
+    assert configured.chat_provider == "bedrock"
+    assert configured.resolved_router_provider == "bedrock"
+    assert configured.router_model_name == "us.amazon.nova-micro-v1:0"

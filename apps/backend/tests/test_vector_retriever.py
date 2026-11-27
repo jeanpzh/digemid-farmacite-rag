@@ -187,3 +187,50 @@ def test_multiquery_retriever_applies_final_result_limit():
         "relevante 1",
         "relevante 2",
     ]
+
+
+def test_vector_retriever_preloads_and_caches_collection_metadata():
+    retriever = VectorRetriever(
+        FakeVectorStore(),
+        collection="digemid",
+        metadata_engine=object(),
+        metadata_cache_ttl_seconds=60.0,
+    )
+    preload_calls = []
+    fallback_calls = []
+
+    def fake_preload():
+        preload_calls.append(True)
+        return {
+            "hash-1": {
+                "id": 7,
+                "doc_hash": "hash-1",
+                "filename": "PARACETAMOL.pdf",
+                "source_url": "https://example.test/paracetamol.pdf",
+            },
+            "hash-2": {
+                "id": 8,
+                "doc_hash": "hash-2",
+                "filename": "IBUPROFENO.pdf",
+                "source_url": "https://example.test/ibuprofeno.pdf",
+            },
+        }
+
+    def fake_load(doc_hashes):
+        fallback_calls.append(set(doc_hashes))
+        return {}
+
+    retriever._load_collection_metadata = fake_preload
+    retriever._load_source_metadata = fake_load
+
+    first = [Document(page_content="a", metadata={"doc_hash": "hash-1"})]
+    second = [Document(page_content="b", metadata={"doc_hash": "hash-2"})]
+
+    asyncio.run(retriever.enrich_documents(first))
+    asyncio.run(retriever.enrich_documents(second))
+
+    assert len(preload_calls) == 1
+    assert fallback_calls == []
+    assert first[0].metadata["filename"] == "PARACETAMOL.pdf"
+    assert second[0].metadata["filename"] == "IBUPROFENO.pdf"
+    assert second[0].metadata["document_id"] == "8"
