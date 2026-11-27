@@ -1,8 +1,11 @@
-from datetime import datetime
+from datetime import date, datetime
 
 from sqlalchemy import (
     BigInteger,
+    Boolean,
+    Date,
     DateTime,
+    ForeignKey,
     Index,
     Integer,
     String,
@@ -43,6 +46,15 @@ class Document(Base):
     indexed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     lease_owner: Mapped[str | None] = mapped_column(Text)
     lease_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    origin: Mapped[str] = mapped_column(String, server_default="corpus", nullable=False)
+    publication: Mapped[str] = mapped_column(String, server_default="published", nullable=False)
+    index_stage: Mapped[str | None] = mapped_column(String)
+    queued_from_ui: Mapped[bool] = mapped_column(Boolean, server_default="false", nullable=False)
+    chunks_total: Mapped[int | None] = mapped_column(Integer)
+    chunks_done: Mapped[int | None] = mapped_column(Integer)
+    replaces_id: Mapped[int | None] = mapped_column(ForeignKey("rag.documents.id"))
+    published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    effective_on: Mapped[date | None] = mapped_column(Date)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

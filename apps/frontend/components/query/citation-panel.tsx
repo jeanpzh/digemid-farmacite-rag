@@ -25,7 +25,7 @@ function PanelContents({
     <div className="flex h-full min-h-0 w-full flex-col bg-background">
       <header className="flex shrink-0 items-start justify-between gap-3 border-b border-border px-4 py-3">
         <div className="min-w-0">
-          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-orange-500">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-orange-500 dark:text-orange-300">
             Fuente {active.label}
           </p>
           <h2 className="mt-1 truncate text-sm font-semibold">
@@ -64,7 +64,7 @@ function PanelContents({
                   onClick={() => onSelect(citation.id)}
                   type="button"
                 >
-                  <span className="flex size-6 shrink-0 items-center justify-center rounded bg-orange-500/10 text-xs font-semibold text-orange-600">
+                  <span className="flex size-6 shrink-0 items-center justify-center rounded bg-orange-500/10 text-xs font-semibold text-orange-600 dark:text-orange-300">
                     {citation.label}
                   </span>
                   <span className="min-w-0 flex-1">

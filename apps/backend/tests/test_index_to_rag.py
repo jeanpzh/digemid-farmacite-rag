@@ -18,6 +18,8 @@ def test_indexes_documents_with_bounded_concurrency(monkeypatch):
             filename=f"{index}.pdf",
             doc_hash=f"hash-{index}",
             lease_owner=f"lease-{index}",
+            publication="published",
+            queued_from_ui=False,
             source_url=f"https://example.test/{index}.pdf",
         )
         for index in range(1, 4)
@@ -33,7 +35,7 @@ def test_indexes_documents_with_bounded_concurrency(monkeypatch):
     indexer_engines = []
     indexer_lock = Lock()
 
-    def claim_document(_session, collection):
+    def claim_document(_session, collection, *, uploads_only=False):
         assert collection == "digemid"
         with indexer_lock:
             assert len(indexer_engines) == 2
@@ -115,6 +117,8 @@ def test_marks_failed_documents_and_closes_worker_indexers(monkeypatch):
         filename="broken.pdf",
         doc_hash="broken-hash",
         lease_owner="lease-7",
+        publication="published",
+        queued_from_ui=False,
         source_url="https://example.test/broken.pdf",
     )
     failed = []
@@ -143,7 +147,7 @@ def test_marks_failed_documents_and_closes_worker_indexers(monkeypatch):
     monkeypatch.setattr(index_to_rag, "create_embedding_service", lambda: object())
     monkeypatch.setattr(index_to_rag, "LangChainIndexer", FakeIndexer)
     monkeypatch.setattr(index_to_rag, "session_scope", fake_session_scope)
-    def claim_document(_session, _collection):
+    def claim_document(_session, _collection, *, uploads_only=False):
         nonlocal claimed
         if claimed:
             return None
@@ -181,6 +185,8 @@ def test_waits_for_active_workers_before_reraising_a_failure(monkeypatch):
             filename="broken.pdf",
             doc_hash="broken-hash",
             lease_owner="lease-1",
+            publication="published",
+            queued_from_ui=False,
             source_url="https://example.test/broken.pdf",
         ),
         SimpleNamespace(
@@ -189,6 +195,8 @@ def test_waits_for_active_workers_before_reraising_a_failure(monkeypatch):
             filename="valid.pdf",
             doc_hash="valid-hash",
             lease_owner="lease-2",
+            publication="published",
+            queued_from_ui=False,
             source_url="https://example.test/valid.pdf",
         ),
     ]
@@ -200,7 +208,7 @@ def test_waits_for_active_workers_before_reraising_a_failure(monkeypatch):
     indexed = []
     closed = []
 
-    def claim_document(_session, _collection):
+    def claim_document(_session, _collection, *, uploads_only=False):
         with claim_lock:
             return documents.pop(0) if documents else None
 

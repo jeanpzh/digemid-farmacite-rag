@@ -2,11 +2,13 @@ import logging
 import os
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from threading import Event, Lock, local
+from datetime import datetime, timezone
+from sqlalchemy import or_, select, update
 
 from app.db import DB_POOL_MAX_SIZE, _database_url, advisory_lock, engine, session_scope
 from app.infraestructure.embeddings import create_embedding_service
 from app.models.document import Document
-from app.services.ingestion import claim_document, mark_failed, mark_indexed
+from app.services.ingestion import claim_document, mark_failed, mark_indexed, staged_collection
 from app.services.langchain_indexer import (
     PARSER_VERSION,
     LangChainIndexer,
@@ -24,7 +26,27 @@ def index_pending_documents(collection: str = DEFAULT_COLLECTION) -> int:
         return _index_pending_documents(collection)
 
 
-def _index_pending_documents(collection: str) -> int:
+def index_uploaded_documents(collection: str) -> int:
+    with session_scope() as session:
+        ready = session.scalar(
+            select(Document.id).where(
+                Document.collection == collection,
+                Document.queued_from_ui.is_(True),
+                Document.publication != "archived",
+                or_(
+                    Document.status == "pending",
+                    (Document.status == "processing")
+                    & (Document.lease_until < datetime.now(timezone.utc)),
+                ),
+            ).limit(1)
+        )
+    if ready is None:
+        return 0
+    with advisory_lock():
+        return _index_pending_documents(collection, uploads_only=True)
+
+
+def _index_pending_documents(collection: str, *, uploads_only: bool = False) -> int:
     from app.configs.scrapy_digemid import get_storage_client
 
     database_url = _database_url()
@@ -49,6 +71,14 @@ def _index_pending_documents(collection: str) -> int:
         return worker_state.storage, worker_state.indexer
 
     def index_document(document: Document) -> int:
+        def report_progress(stage: str, done: int, total: int) -> None:
+            with session_scope() as session:
+                session.execute(
+                    update(Document).where(
+                        Document.id == document.id, Document.lease_owner == document.lease_owner,
+                    ).values(index_stage=stage, chunks_done=done, chunks_total=total)
+                )
+
         try:
             storage, indexer = worker_resources()
             logger.info("Indexing pending PDF filename=%s", document.filename)
@@ -56,9 +86,10 @@ def _index_pending_documents(collection: str) -> int:
             raw_text = indexer.index_pdf(
                 contents,
                 document.filename,
-                collection,
+                collection if document.publication == "published" else staged_collection(collection),
                 document.doc_hash,
                 document.source_url,
+                **({"report_progress": report_progress} if document.queued_from_ui else {}),
             )
             with session_scope() as session:
                 mark_indexed(
@@ -72,6 +103,8 @@ def _index_pending_documents(collection: str) -> int:
             logger.exception("Failed to index PDF filename=%s", document.filename)
             with session_scope() as session:
                 mark_failed(session, document.id, document.lease_owner, error)
+            if uploads_only:
+                return 0
             raise
         return 1
 
@@ -115,7 +148,7 @@ def _index_pending_documents(collection: str) -> int:
             while futures or not exhausted:
                 while not exhausted and len(futures) < MAX_INDEX_WORKERS:
                     with session_scope() as session:
-                        document = claim_document(session, collection)
+                        document = claim_document(session, collection, uploads_only=uploads_only)
                     if document is None:
                         exhausted = True
                         break

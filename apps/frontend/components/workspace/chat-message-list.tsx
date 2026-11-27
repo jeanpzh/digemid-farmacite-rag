@@ -5,6 +5,8 @@ import {
   CheckCircleIcon,
   FileTextIcon,
 } from "@phosphor-icons/react";
+import { CheckCircle2Icon, ChevronDownIcon, ChevronRightIcon, XCircleIcon } from "lucide-react";
+import { useState } from "react";
 
 import type { ChatMessage } from "@/components/workspace/workspace-provider";
 import {
@@ -22,6 +24,7 @@ import { Reasoning, ReasoningTrigger } from "@/components/ai-elements/reasoning"
 import { cn } from "@/lib/utils";
 import type { RetrievalStatus } from "@/lib/validation/rag-stream";
 import type { Citation } from "@/lib/validation/rag-stream";
+import type { TurnEvalState } from "@/lib/validation/ragas";
 import { getCitationDocumentType } from "@/lib/workspace-view-model";
 
 export function ChatMessageList({
@@ -32,6 +35,7 @@ export function ChatMessageList({
   onCitationClick,
   onRetry,
   retrievalStatus,
+  turnEvaluations,
 }: {
   activeCitationId: string | null;
   activeMessageId: string | null;
@@ -44,6 +48,7 @@ export function ChatMessageList({
   ) => void;
   onRetry?: () => void;
   retrievalStatus: RetrievalStatus | null;
+  turnEvaluations?: Record<string, TurnEvalState>;
 }) {
   return (
     <Conversation aria-label="Conversación" className="h-full min-h-0 flex-1">
@@ -88,6 +93,7 @@ export function ChatMessageList({
                 <AssistantParts
                   activeCitationId={activeCitationId}
                   active={activeMessageId === message.id}
+                  evaluation={turnEvaluations?.[message.id]}
                   message={message}
                   isRetrieving={retrievalStatus?.state === "active"}
                   onCitationClick={onCitationClick}
@@ -141,12 +147,14 @@ export function ChatMessageList({
 function AssistantParts({
   active,
   activeCitationId,
+  evaluation,
   message,
   isRetrieving,
   onCitationClick,
 }: {
   active: boolean;
   activeCitationId: string | null;
+  evaluation?: TurnEvalState;
   isRetrieving: boolean;
   message: ChatMessage;
   onCitationClick: (
@@ -185,6 +193,7 @@ function AssistantParts({
         messageId={message.id}
         text={text}
       />
+      {evaluation ? <TurnEvaluationBadge evaluation={evaluation} /> : null}
       {!isStreaming && citations.length ? (
         <CitationSummary
           activeCitationId={activeCitationId}
@@ -192,6 +201,93 @@ function AssistantParts({
           messageId={message.id}
           onCitationClick={onCitationClick}
         />
+      ) : null}
+    </div>
+  );
+}
+
+function TurnEvaluationBadge({ evaluation }: { evaluation: TurnEvalState }) {
+  const [expanded, setExpanded] = useState(false);
+
+  if (evaluation.status === "loading") {
+    return (
+      <div className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground">
+        <span className="size-1.5 animate-pulse rounded-full bg-brand-accent" />
+        Evaluando fidelidad con RAGAS…
+      </div>
+    );
+  }
+
+  if (evaluation.status === "error") {
+    return (
+      <div className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 text-xs text-muted-foreground">
+        {evaluation.message}
+      </div>
+    );
+  }
+
+  const { faithfulness, response_relevancy: relevancy, claims, judge_model: judgeModel } =
+    evaluation.data;
+  const fPct = faithfulness != null ? `${Math.round(faithfulness * 100)}%` : "—";
+  const rPct = relevancy != null ? `${Math.round(relevancy * 100)}%` : "—";
+
+  return (
+    <div className="rounded-xl border border-border bg-card/80">
+      <button
+        aria-expanded={expanded}
+        className="flex w-full items-center justify-between gap-3 px-3.5 py-2.5 text-left text-xs transition-colors hover:bg-muted/60"
+        onClick={() => setExpanded((prev) => !prev)}
+        type="button"
+      >
+        <span className="flex flex-wrap items-center gap-2 font-medium text-foreground">
+          <span className="rounded bg-foreground px-1.5 py-0.5 font-mono text-[10px] font-semibold text-background">
+            RAGAS
+          </span>
+          <span>
+            Fidelidad <strong>{fPct}</strong>
+          </span>
+          <span aria-hidden="true" className="text-border">·</span>
+          <span>
+            Relevancia <strong>{rPct}</strong>
+          </span>
+          {claims.length > 0 ? (
+            <>
+              <span aria-hidden="true" className="text-border">·</span>
+              <span className="text-muted-foreground">
+                {claims.filter((c) => c.supported).length}/{claims.length} afirmaciones
+              </span>
+            </>
+          ) : null}
+        </span>
+        {claims.length > 0 ? (
+          expanded ? (
+            <ChevronDownIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          ) : (
+            <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          )
+        ) : null}
+      </button>
+      {expanded && claims.length > 0 ? (
+        <div className="space-y-1.5 border-t border-border px-3.5 py-3">
+          {claims.map((claim, idx) => (
+            <div className="flex items-start gap-2 text-xs" key={`live-claim-${idx}`}>
+              {claim.supported ? (
+                <CheckCircle2Icon className="mt-0.5 size-3.5 shrink-0 text-emerald-700 dark:text-emerald-400" aria-hidden="true" />
+              ) : (
+                <XCircleIcon className="mt-0.5 size-3.5 shrink-0 text-rose-700 dark:text-rose-400" aria-hidden="true" />
+              )}
+              <div className="min-w-0">
+                <p className="font-medium text-foreground">{claim.claim}</p>
+                <p className="text-[11px] text-muted-foreground">{claim.reason}</p>
+              </div>
+            </div>
+          ))}
+          {judgeModel ? (
+            <p className="pt-1 font-mono text-[10px] text-muted-foreground">
+              Juez: {judgeModel}
+            </p>
+          ) : null}
+        </div>
       ) : null}
     </div>
   );

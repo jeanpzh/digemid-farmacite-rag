@@ -53,3 +53,28 @@ def create_router_model(config: Settings = settings):
         temperature=0,
         max_tokens=config.router_max_tokens,
     )
+
+
+def create_judge_model(config: Settings = settings):
+    provider = config.resolved_eval_provider
+    if provider == "bedrock":
+        return ChatBedrockConverse(
+            model=config.eval_judge_model,
+            region_name=config.aws_region,
+            credentials_profile_name=config.aws_profile,
+            temperature=0,
+            max_tokens=config.eval_judge_max_tokens,
+        )
+    if provider == "ollama":
+        from langchain_ollama import ChatOllama
+
+        return ChatOllama(
+            model=config.eval_judge_model,
+            base_url=config.ollama_base_url,
+            temperature=0,
+        )
+    return ChatGroq(
+        model=config.eval_judge_model,
+        temperature=0,
+        max_tokens=config.eval_judge_max_tokens,
+    )

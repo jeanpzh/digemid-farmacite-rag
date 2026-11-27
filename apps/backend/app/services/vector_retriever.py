@@ -161,6 +161,7 @@ class VectorRetriever:
             SourceDocument.source_url,
         ).where(
             SourceDocument.collection == self.collection,
+            SourceDocument.publication == "published",
         )
         with self.metadata_engine.connect() as connection:
             rows = connection.execute(statement).mappings()

@@ -11,6 +11,7 @@ import {
   type ReactNode,
 } from "react";
 
+import { useRagasDefault } from "@/hooks/use-ragas-default";
 import {
   ragDataPartSchemas,
   type Citation,
@@ -30,6 +31,8 @@ type WorkspaceContextValue = {
   status: "submitted" | "streaming" | "ready" | "error";
   error?: Error;
   isLoading: boolean;
+  ragasEnabled: boolean;
+  setRagasEnabled: (enabled: boolean) => void;
   input: string;
   setInput: (value: string) => void;
   submitQuestion: (question: string) => void;
@@ -65,6 +68,9 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     crypto.randomUUID(),
   );
   const [input, setInput] = useState("");
+  const ragasDefault = useRagasDefault();
+  const [ragasOverride, setRagasOverride] = useState<boolean | null>(null);
+  const ragasEnabled = ragasOverride ?? ragasDefault;
   const [retrievalStatus, setRetrievalStatus] =
     useState<RetrievalStatus | null>(null);
   const { messages, sendMessage, setMessages, stop, status, error } =
@@ -101,6 +107,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    setRagasOverride((current) => current ?? ragasDefault);
     setRetrievalStatus(null);
     sendMessage(
       { text: trimmedQuestion },
@@ -115,6 +122,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
     }
     setMessages([]);
     setConversationId(crypto.randomUUID());
+    setRagasOverride(null);
     setRetrievalStatus(null);
     setInput("");
   }
@@ -134,6 +142,8 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
         status,
         error,
         isLoading,
+        ragasEnabled,
+        setRagasEnabled: setRagasOverride,
         input,
         setInput,
         submitQuestion,

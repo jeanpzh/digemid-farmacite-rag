@@ -303,7 +303,7 @@ export function SourcesPanel({
         id="sources-panel"
         aria-label="Fuentes consultadas"
         className={cn(
-          "hidden h-full min-h-0 w-full min-w-0 self-stretch overflow-hidden border-l border-border bg-[#f7f3ea] transition-[opacity,transform] duration-300 ease-out lg:grid lg:grid-cols-[3.25rem_minmax(0,1fr)]",
+          "hidden h-full min-h-0 w-full min-w-0 self-stretch overflow-hidden border-l border-border bg-[#f7f3ea] transition-[opacity,transform] duration-300 ease-out lg:grid lg:grid-cols-[3.25rem_minmax(0,1fr)] dark:bg-card",
           open
             ? "lg:translate-x-0 lg:opacity-100"
             : "pointer-events-none lg:translate-x-3 lg:opacity-0",

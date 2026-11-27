@@ -1,0 +1,100 @@
+[
+  {
+    "case_id": "diclofenaco-gel-dosis-maxima",
+    "category": "standalone",
+    "question": "¿Cuál es la posología y la dosis máxima diaria del diclofenaco sódico en gel?",
+    "history": [],
+    "reference_answer": "En adultos y adolescentes a partir de 14 años, el diclofenaco sódico 10 mg/g gel se aplica de 3 a 4 veces al día en una cantidad de 1 a 4 g de gel (10 a 40 mg de diclofenaco sódico). La dosis máxima diaria total es de 16 g de gel, equivalente a 160 mg de diclofenaco sódico.",
+    "expected_refusal": false
+  },
+  {
+    "case_id": "clotrimazol-crema-contraindicaciones",
+    "category": "standalone",
+    "question": "¿Para qué está indicado el clotrimazol 1% crema y cuáles son sus contraindicaciones o advertencias principales?",
+    "history": [],
+    "reference_answer": "El clotrimazol 1% crema está indicado para el tratamiento de tinea pedis o pie de atleta. Está contraindicado en casos de hipersensibilidad al principio activo, a imidazoles o a los excipientes. No debe usarse para tratar infecciones de uñas o cuero cabelludo y no se recomienda aplicar vendajes oclusivos porque favorecen la absorción sistémica.",
+    "expected_refusal": false
+  },
+  {
+    "case_id": "fexofenadina-120-posologia-pediatria",
+    "category": "standalone",
+    "question": "¿Cuál es la dosis de fexofenadina 120 mg tableta recubierta y se puede usar en niños menores de 12 años?",
+    "history": [],
+    "reference_answer": "Fexofenadina clorhidrato 120 mg está indicada en adultos y niños a partir de 12 años a una dosis de 120 mg una vez al día tomada antes de una comida. No se ha estudiado su eficacia y seguridad en niños menores de 12 años. No es necesario ajustar la dosis en pacientes de edad avanzada ni en pacientes con trastornos renales o hepáticos.",
+    "expected_refusal": false
+  },
+  {
+    "case_id": "ibuprofeno-200-posologia-intervalos",
+    "category": "standalone",
+    "question": "¿Cuál es la posología y el intervalo mínimo entre dosis de ibuprofeno 200 mg tableta recubierta en adultos?",
+    "history": [],
+    "reference_answer": "En adultos la dosis es de 200 a 400 mg por vía oral hasta un máximo de 3 veces al día si es necesario, manteniendo un intervalo mínimo de 4 horas entre dosis de 200 mg y de 6 horas entre dosis de 400 mg, utilizando la dosis eficaz más baja durante el menor tiempo necesario.",
+    "expected_refusal": false
+  },
+  {
+    "case_id": "ambroxol-30-indicaciones-administracion",
+    "category": "standalone",
+    "question": "¿Para qué sirve el ambroxol 30 mg/5 mL solución oral y cuánto tiempo debe usarse antes de reevaluar?",
+    "history": [],
+    "reference_answer": "El ambroxol 30 mg/5 mL solución oral está indicado para reducir la viscosidad de las secreciones mucosas y facilitar su expulsión. Puede tomarse con o sin comida, recomendándose beber un vaso de agua tras cada dosis y abundante líquido. Si el paciente no mejora o empeora después de 5 días de tratamiento, se debe evaluar la situación clínica.",
+    "expected_refusal": false
+  },
+  {
+    "case_id": "terbinafina-crema-uso-pediatria",
+    "category": "standalone",
+    "question": "¿Cómo se aplica la terbinafina 1% crema y está recomendada en menores de 18 años?",
+    "history": [],
+    "reference_answer": "La terbinafina 1% crema está indicada para tinea pedis o pie de atleta en adultos. Se aplica por vía cutánea limpiando y secando a fondo la zona afectada y aplicando una capa fina con un ligero masaje. No se recomienda su utilización en menores de 18 años por experiencia limitada.",
+    "expected_refusal": false
+  },
+  {
+    "case_id": "followup-diclofenaco-dosis-maxima",
+    "category": "followup",
+    "question": "¿Y cuál es la dosis máxima diaria del primero?",
+    "history": [
+      {
+        "role": "user",
+        "text": "¿Para qué se usan el diclofenaco sódico en gel y la simeticona 240 mg?"
+      },
+      {
+        "role": "assistant",
+        "text": "El diclofenaco sódico 10 mg/g gel se utiliza para el tratamiento sintomático externo del dolor en adultos, mientras que la simeticona 240 mg cápsula blanda se usa para el alivio sintomático de la distensión abdominal (flatulencia)."
+      }
+    ],
+    "reference_answer": "La dosis máxima diaria total de diclofenaco sódico 10 mg/g gel es de 16 g de gel al día, equivalente a 160 mg de diclofenaco sódico.",
+    "expected_refusal": false
+  },
+  {
+    "case_id": "followup-paracetamol-comida",
+    "category": "followup",
+    "question": "¿Y conviene tomarlo con o sin comida para un alivio rápido?",
+    "history": [
+      {
+        "role": "user",
+        "text": "¿Para qué está indicado el paracetamol 500 mg en tabletas?"
+      },
+      {
+        "role": "assistant",
+        "text": "El paracetamol 500 mg tableta está indicado para el alivio sintomático del dolor ocasional leve o moderado y estados febriles en adultos y adolescentes mayores de 12 años."
+      }
+    ],
+    "reference_answer": "Para un alivio rápido del dolor, el paracetamol 500 mg tableta debe tomarse sin comida, ya que la toma concomitante con alimentos aumenta el tiempo de absorción al disminuir la motilidad y el tránsito gastrointestinal.",
+    "expected_refusal": false
+  },
+  {
+    "case_id": "multi-medicine-edad-fexofenadina-terbinafina",
+    "category": "multi_medicine",
+    "question": "¿Desde qué edad está recomendada la fexofenadina 120 mg tableta recubierta en comparación con la terbinafina 1% crema?",
+    "history": [],
+    "reference_answer": "Fexofenadina clorhidrato 120 mg tableta recubierta está indicada en adultos y niños a partir de 12 años (no estudiada en menores de 12 años), mientras que la terbinafina 1% crema está indicada en adultos y no se recomienda en menores de 18 años.",
+    "expected_refusal": false
+  },
+  {
+    "case_id": "out-of-domain-ceviche",
+    "category": "out_of_domain",
+    "question": "¿Cuál es la receta tradicional para preparar ceviche peruano con limón y ají limo?",
+    "history": [],
+    "reference_answer": "",
+    "expected_refusal": true
+  }
+]

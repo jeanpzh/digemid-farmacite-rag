@@ -1,14 +1,22 @@
 "use client";
 
-import { PanelRightCloseIcon } from "lucide-react";
-import { useRef, useState } from "react";
+import { PanelRightCloseIcon, SparklesIcon } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 
 import { ChatComposer } from "@/components/workspace/chat-composer";
 import { ChatMessageList } from "@/components/workspace/chat-message-list";
 import { ChatWelcome } from "@/components/workspace/chat-welcome";
+import {
+  getAssistantCitations,
+  getAssistantText,
+} from "@/components/workspace/markdown-citation-response";
 import { SourcesPanel } from "@/components/workspace/sources-panel";
 import { useWorkspace } from "@/components/workspace/workspace-provider";
 import type { Citation } from "@/lib/validation/rag-stream";
+import {
+  turnEvaluationSchema,
+  type TurnEvalState,
+} from "@/lib/validation/ragas";
 import { cn } from "@/lib/utils";
 import { getConsultationTitle } from "@/lib/workspace-view-model";
 
@@ -24,7 +32,9 @@ function ConversationPage() {
     error,
     isLoading,
     messages,
+    ragasEnabled,
     retrievalStatus,
+    setRagasEnabled,
     submitQuestion,
   } = useWorkspace();
   const [selectedCitation, setSelectedCitation] = useState<{
@@ -32,7 +42,73 @@ function ConversationPage() {
     messageId: string;
   } | null>(null);
   const [panelCitations, setPanelCitations] = useState<Citation[]>([]);
+  const [turnEvaluations, setTurnEvaluations] = useState<
+    Record<string, TurnEvalState>
+  >({});
+  const evaluatedMessageIdsRef = useRef<Set<string>>(new Set());
   const citationTriggerRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!ragasEnabled) return;
+
+    messages.forEach((message, index) => {
+      if (message.role !== "assistant") return;
+      if (evaluatedMessageIdsRef.current.has(message.id)) return;
+      const isStreamingMessage = message.parts.some(
+        (part) => part.type === "text" && part.state === "streaming",
+      );
+      if (isStreamingMessage || isLoading) return;
+
+      const answer = getAssistantText(message.parts).trim();
+      const citations = getAssistantCitations(message.parts);
+      if (!answer || citations.length === 0) return;
+
+      const priorUserMessage = [...messages.slice(0, index)]
+        .reverse()
+        .find((item) => item.role === "user");
+      const question = priorUserMessage?.parts
+        .filter((part) => part.type === "text")
+        .map((part) => part.text)
+        .join("")
+        .trim();
+      if (!question) return;
+
+      evaluatedMessageIdsRef.current.add(message.id);
+      setTurnEvaluations((prev) => ({
+        ...prev,
+        [message.id]: { status: "loading" },
+      }));
+
+      fetch("/api/v1/evaluations/turn", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          question,
+          answer,
+          contexts: citations.map((citation) => citation.excerpt),
+        }),
+      })
+        .then(async (response) => {
+          if (!response.ok) throw new Error(`HTTP ${response.status}`);
+          return turnEvaluationSchema.parse(await response.json());
+        })
+        .then((data) => {
+          setTurnEvaluations((prev) => ({
+            ...prev,
+            [message.id]: { status: "ready", data },
+          }));
+        })
+        .catch(() => {
+          setTurnEvaluations((prev) => ({
+            ...prev,
+            [message.id]: {
+              status: "error",
+              message: "No se pudo evaluar con RAGAS",
+            },
+          }));
+        });
+    });
+  }, [isLoading, messages, ragasEnabled]);
 
   const visiblePanelCitations = messages.length === 0 ? [] : panelCitations;
   const activeCitation = selectedCitation
@@ -91,6 +167,21 @@ function ConversationPage() {
           </span>
         </div>
         <div className="flex shrink-0 items-center gap-3">
+          <button
+            aria-pressed={ragasEnabled}
+            className={cn(
+              "inline-flex min-h-9 items-center gap-2 rounded-lg border px-3 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent",
+              ragasEnabled
+                ? "border-foreground bg-foreground text-background"
+                : "border-border bg-card text-foreground hover:bg-muted",
+            )}
+            onClick={() => setRagasEnabled(!ragasEnabled)}
+            title="Activar evaluación RAGAS en vivo (fidelidad y relevancia)"
+            type="button"
+          >
+            <SparklesIcon className="size-3.5" aria-hidden="true" />
+            <span>RAGAS {ragasEnabled ? "ON" : "OFF"}</span>
+          </button>
           {activeCitation ? (
             <button
               className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-border bg-card px-3 text-xs font-medium text-foreground transition-colors hover:bg-muted focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-accent"
@@ -131,6 +222,7 @@ function ConversationPage() {
                 onCitationClick={selectCitation}
                 onRetry={lastUserQuestion ? () => submitQuestion(lastUserQuestion) : undefined}
                 retrievalStatus={retrievalStatus}
+                turnEvaluations={turnEvaluations}
               />
             )}
             {isLoading ? (

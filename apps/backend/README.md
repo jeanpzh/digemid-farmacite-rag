@@ -90,3 +90,15 @@ uv run pytest -q
 ```
 
 Keep `uv.lock` in sync with `pyproject.toml` (Docker builds use `uv sync --frozen`).
+
+## Source library
+
+Apply `migrations/007_document_library.sql` before upgrading the backend. Set
+`SOURCE_LIBRARY_ENABLED=true` on the private preview to enable the source
+library and its background worker. The preview uses tailnet access for the
+upload, retry, and publication actions.
+
+New PDFs enter review and are indexed in a staging collection. Publishing
+makes the selected document available to chat. Approving a replacement swaps
+only those two document versions in one transaction. A new upload or retry
+does not need the `reindex-embeddings` command.
