@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Sequence
+import time
 
 from langchain_core.documents import Document
 from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
@@ -16,11 +17,15 @@ class VectorRetriever:
         k: int = 5,
         collection: str = settings.vector_collection,
         metadata_engine=None,
+        metadata_cache_ttl_seconds: float = settings.metadata_cache_ttl_seconds,
     ):
         self.k = k
         self.vector_store = vector_store
         self.collection = collection
         self.metadata_engine = metadata_engine
+        self.metadata_cache_ttl_seconds = metadata_cache_ttl_seconds
+        self._metadata_cache: dict[str, tuple[float, dict]] = {}
+        self._collection_cache_expires_at: float = 0.0
 
     def as_retriever(self) -> VectorStoreRetriever:
         return self.vector_store.as_retriever(
@@ -98,10 +103,42 @@ class VectorRetriever:
         if not doc_hashes:
             return documents
 
-        source_metadata = await asyncio.to_thread(
-            self._load_source_metadata,
-            doc_hashes,
-        )
+        now = time.monotonic()
+        source_metadata: dict[str, dict] = {}
+        missing_hashes: set[str] = set()
+        if self.metadata_cache_ttl_seconds > 0:
+            if self._collection_cache_expires_at <= now:
+                collection_rows = await asyncio.to_thread(
+                    self._load_collection_metadata
+                )
+                expires_at = time.monotonic() + self.metadata_cache_ttl_seconds
+                self._metadata_cache = {
+                    doc_hash: (expires_at, row)
+                    for doc_hash, row in collection_rows.items()
+                }
+                self._collection_cache_expires_at = expires_at
+                now = time.monotonic()
+
+            for doc_hash in doc_hashes:
+                cached = self._metadata_cache.get(doc_hash)
+                if cached is not None and cached[0] > now:
+                    source_metadata[doc_hash] = cached[1]
+                else:
+                    missing_hashes.add(doc_hash)
+        else:
+            missing_hashes = doc_hashes
+
+        if missing_hashes:
+            fetched = await asyncio.to_thread(
+                self._load_source_metadata,
+                missing_hashes,
+            )
+            expires_at = time.monotonic() + self.metadata_cache_ttl_seconds
+            for doc_hash, row in fetched.items():
+                source_metadata[doc_hash] = row
+                if self.metadata_cache_ttl_seconds > 0:
+                    self._metadata_cache[doc_hash] = (expires_at, row)
+
         for document in documents:
             source = source_metadata.get(str(document.metadata.get("doc_hash")))
             if source is None:
@@ -111,6 +148,23 @@ class VectorRetriever:
             document.metadata["document_id"] = str(source["id"])
             document.metadata["document_version"] = source["doc_hash"]
         return documents
+
+    @traceable(
+        name="metadata_collection_preload",
+        run_type="tool",
+    )
+    def _load_collection_metadata(self) -> dict[str, dict]:
+        statement = select(
+            SourceDocument.id,
+            SourceDocument.doc_hash,
+            SourceDocument.filename,
+            SourceDocument.source_url,
+        ).where(
+            SourceDocument.collection == self.collection,
+        )
+        with self.metadata_engine.connect() as connection:
+            rows = connection.execute(statement).mappings()
+            return {row["doc_hash"]: dict(row) for row in rows}
 
     @traceable(
         name="metadata_query",
