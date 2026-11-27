@@ -13,6 +13,10 @@ def create_chat_service(
     vector_store,
     metadata_engine=None,
     router_model=None,
+    *,
+    max_distance: float = settings.retrieval_max_distance,
+    min_results: int = settings.retrieval_min_results,
+    expansion_max_queries: int = settings.retrieval_expansion_max_queries,
 ) -> ChatService:
     effective_router_model = router_model or model
 
@@ -24,10 +28,10 @@ def create_chat_service(
         ),
         query_router=QueryRouter(model=effective_router_model),
         queries_generator=QueryGenerator(model=effective_router_model),
-        max_distance=settings.retrieval_max_distance,
-        min_results=settings.retrieval_min_results,
+        max_distance=max_distance,
+        min_results=min_results,
         max_results=settings.retrieval_max_results,
-        expansion_max_queries=settings.retrieval_expansion_max_queries,
+        expansion_max_queries=expansion_max_queries,
     )
 
     response_generator = ResponseGenerator(

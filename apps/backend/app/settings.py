@@ -9,6 +9,7 @@ VECTOR_SCHEMA = "rag"
 VECTOR_TABLE = "langchain_embeddings"
 DEFAULT_EMBEDDING_MODEL = "amazon.titan-embed-text-v2:0"
 DEFAULT_ROUTER_MODEL = "us.amazon.nova-micro-v1:0"
+DEFAULT_EVAL_JUDGE_MODEL = "us.amazon.nova-2-lite-v1:0"
 EMBEDDING_DIMENSION = 1024
 ROOT_ENV_FILE = Path(__file__).resolve().parents[3] / ".env"
 ReasoningFormat = Literal["hidden", "parsed", "raw"]
@@ -28,9 +29,13 @@ class Settings(BaseSettings):
     router_provider: ChatProvider | None = None
     router_model_name: str = DEFAULT_ROUTER_MODEL
     router_max_tokens: int = 256
+    eval_provider: ChatProvider | None = None
+    eval_judge_model: str = DEFAULT_EVAL_JUDGE_MODEL
+    eval_judge_max_tokens: int = 2048
     supabase_db_url: str = Field(...)
     supabase_url: str | None = None
     supabase_service_role_key: str | None = None
+    source_library_enabled: bool = False
     embedding_provider: EmbeddingProvider = "bedrock"
     embedding_model: str = DEFAULT_EMBEDDING_MODEL
     embedding_dimension: int = EMBEDDING_DIMENSION
@@ -67,6 +72,10 @@ class Settings(BaseSettings):
     def resolved_router_provider(self) -> ChatProvider:
         return self.router_provider or self.chat_provider
 
+    @property
+    def resolved_eval_provider(self) -> ChatProvider:
+        return self.eval_provider or self.resolved_router_provider
+
     @model_validator(mode="after")
     def validate_runtime_configuration(self) -> "Settings":
         if self.embedding_dimension != EMBEDDING_DIMENSION:
@@ -77,12 +86,14 @@ class Settings(BaseSettings):
             self.embedding_provider == "bedrock"
             or self.chat_provider == "bedrock"
             or self.resolved_router_provider == "bedrock"
+            or self.resolved_eval_provider == "bedrock"
         )
         if uses_bedrock and not self.aws_region.strip():
             raise ValueError("AWS_REGION is required when using Bedrock")
         uses_groq = (
             self.chat_provider == "groq"
             or self.resolved_router_provider == "groq"
+            or self.resolved_eval_provider == "groq"
         )
         if uses_groq and not self.groq_api_key:
             raise ValueError("GROQ_API_KEY is required when CHAT_PROVIDER=groq")

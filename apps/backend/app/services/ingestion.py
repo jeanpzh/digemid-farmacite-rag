@@ -12,19 +12,27 @@ LEASE_DURATION = timedelta(minutes=15)
 MAX_RETRIES = 3
 
 
-def claim_document(session: Session, collection: str) -> Document | None:
+def staged_collection(collection: str) -> str:
+    return f"{collection}:review"
+
+
+def claim_document(
+    session: Session, collection: str, *, uploads_only: bool = False
+) -> Document | None:
     now = datetime.now(timezone.utc)
+    query = select(Document).where(
+        Document.collection == collection,
+        Document.publication != "archived",
+        or_(
+            Document.status == "pending",
+            (Document.status == "processing") & (Document.lease_until < now),
+            (Document.status == "failed") & (Document.origin == "corpus") & (Document.retries < MAX_RETRIES),
+        ),
+    )
+    if uploads_only:
+        query = query.where(Document.queued_from_ui.is_(True))
     document = session.scalars(
-        select(Document)
-        .where(
-            Document.collection == collection,
-            or_(
-                Document.status == "pending",
-                (Document.status == "processing") & (Document.lease_until < now),
-                (Document.status == "failed") & (Document.retries < MAX_RETRIES),
-            ),
-        )
-        .order_by(Document.created_at)
+        query.order_by(Document.created_at)
         .with_for_update(skip_locked=True)
         .limit(1)
     ).first()
@@ -35,6 +43,10 @@ def claim_document(session: Session, collection: str) -> Document | None:
     document.lease_owner = f"{socket.gethostname()}:{os.getpid()}:{uuid4()}"
     document.lease_until = now + LEASE_DURATION
     document.retries += 1
+    document.index_stage = "extracting"
+    document.chunks_total = None
+    document.chunks_done = None
+    document.updated_at = now
     return document
 
 
@@ -54,6 +66,8 @@ def mark_indexed(
             indexed_at=datetime.now(timezone.utc),
             last_error=None,
             parser_version=parser_version,
+            index_stage="complete",
+            queued_from_ui=False,
             lease_owner=None,
             lease_until=None,
             updated_at=datetime.now(timezone.utc),
@@ -70,6 +84,7 @@ def mark_failed(session: Session, document_id: int, lease_owner: str, error: Exc
         .values(
             status="failed",
             last_error=str(error)[:4_000],
+            queued_from_ui=False,
             lease_owner=None,
             lease_until=None,
             updated_at=datetime.now(timezone.utc),

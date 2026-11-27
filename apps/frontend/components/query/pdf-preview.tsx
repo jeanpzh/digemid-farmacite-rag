@@ -26,7 +26,7 @@ pdfjs.GlobalWorkerOptions.workerSrc = new URL(
 
 const PAGE_WIDTH = 480;
 const PDF_FRAME_CLASS =
-  "relative flex aspect-[0.78] w-full max-h-[64dvh] min-h-0 items-start justify-center overflow-auto rounded-xl border border-border bg-[#e9e4da] p-3 shadow-inner";
+  "relative flex aspect-[0.78] w-full max-h-[64dvh] min-h-0 items-start justify-center overflow-auto rounded-xl border border-border bg-[#e9e4da] p-3 shadow-inner dark:bg-muted";
 
 function PdfPageFrame({ children }: { children: ReactNode }) {
   return <div className={PDF_FRAME_CLASS}>{children}</div>;

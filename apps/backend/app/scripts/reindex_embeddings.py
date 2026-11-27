@@ -22,13 +22,16 @@ def reset_embedding_index(collection: str = DEFAULT_COLLECTION) -> int:
             )
             result = session.execute(
                 update(Document)
-                .where(Document.collection == collection)
+                .where(Document.collection == collection, Document.publication != "archived")
                 .values(
                     status="pending",
                     retries=0,
                     last_error=None,
                     parser_version=None,
                     indexed_at=None,
+                    index_stage=None,
+                    chunks_done=None,
+                    chunks_total=None,
                     lease_owner=None,
                     lease_until=None,
                     updated_at=func.now(),

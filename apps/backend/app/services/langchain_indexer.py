@@ -3,7 +3,7 @@ import logging
 import tempfile
 from hashlib import sha256
 from pathlib import Path
-from typing import Iterable, Iterator, TypeVar
+from typing import Callable, Iterable, Iterator, TypeVar
 
 from langchain_community.document_loaders import PyPDFLoader
 from langchain_core.documents import Document
@@ -108,11 +108,14 @@ def batch_items(items: list[T], size: int) -> Iterator[list[T]]:
 
 
 def embed_documents_in_batches(
-    embedding_service: Embeddings, texts: list[str]
+    embedding_service: Embeddings, texts: list[str],
+    report_progress: Callable[[int], None] | None = None,
 ) -> list[list[float]]:
     embeddings: list[list[float]] = []
     for batch in batch_items(texts, EMBEDDING_BATCH_SIZE):
         embeddings.extend(embedding_service.embed_documents(batch))
+        if report_progress is not None:
+            report_progress(len(embeddings))
     return embeddings
 
 
@@ -160,6 +163,8 @@ class LangChainIndexer:
         collection: str,
         doc_hash: str,
         source_url: str | None = None,
+        *,
+        report_progress: Callable[[str, int, int], None] | None = None,
     ) -> str:
         suffix = Path(filename).suffix or ".pdf"
         with tempfile.NamedTemporaryFile(suffix=suffix) as temporary_file:
@@ -183,9 +188,19 @@ class LangChainIndexer:
             len(chunks),
         )
 
+        total = len(chunks)
+
+        def report_embedded(done: int) -> None:
+            if report_progress is not None:
+                report_progress("embedding", done, total)
+
+        report_embedded(0)
         embeddings = embed_documents_in_batches(
-            self.embedding_service, [chunk.page_content for chunk in chunks]
+            self.embedding_service, [chunk.page_content for chunk in chunks],
+            report_embedded,
         )
+        if report_progress is not None:
+            report_progress("saving", total, total)
         records = make_embedding_records(chunks, embeddings)
         current_ids = [chunk.id for chunk in chunks]
         batch_count = (len(records) + DB_WRITE_BATCH_SIZE - 1) // DB_WRITE_BATCH_SIZE

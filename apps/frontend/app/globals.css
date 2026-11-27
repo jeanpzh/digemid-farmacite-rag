@@ -53,6 +53,37 @@
   --sidebar-ring: #a9a393;
 }
 
+.dark {
+  --background: #191815;
+  --foreground: #f0ede4;
+  --card: #23211d;
+  --card-foreground: #f0ede4;
+  --popover: #2a2722;
+  --popover-foreground: #f0ede4;
+  --primary: #e7deca;
+  --primary-foreground: #201d18;
+  --secondary: #343028;
+  --secondary-foreground: #ded5c4;
+  --muted: #28251f;
+  --muted-foreground: #b6ad9c;
+  --accent: #3b352b;
+  --accent-foreground: #f0ede4;
+  --destructive: #f2a69d;
+  --border: #484237;
+  --input: #373229;
+  --ring: #b9a47e;
+  --brand-accent: #c7b593;
+  --brand-accent-foreground: #201d18;
+  --chart-1: #e7deca;
+  --chart-2: #c7b593;
+  --chart-3: #a9987d;
+  --chart-4: #d8a487;
+  --chart-5: #b7a8ad;
+  --sidebar: #12110f;
+  --sidebar-accent: #28241e;
+  --sidebar-border: #353129;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
